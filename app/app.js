@@ -1278,8 +1278,10 @@ function wearRow(c) {
   const st = S.settings; const w = WEAR[c.k];
   if (st.wear?.[c.k]) {
     const used = st.health === c.k;
+    const beside = st.recovery === c.k;               // Whoop naast Garmin
     return `<div class="set-row"><div><div class="v">Gekoppeld</div>
-      <small class="muted">${used ? `Je slaap, HRV, rusthartslag en herstel van ${esc(c.n)} staan bij Gezondheid en op het Overzicht.`
+      <small class="muted">${beside ? `Je slaap, HRV, rusthartslag, SpO2 en herstel komen van ${esc(c.n)}; je trainingen, stappen, Body Battery, stress en VO2max van ${esc(SRC[st.health] || 'Garmin')}.`
+        : used ? `Je slaap, HRV, rusthartslag en herstel van ${esc(c.n)} staan bij Gezondheid en op het Overzicht.`
         : `${esc(SRC[st.health] || 'Een andere koppeling')} gaat voor bij Gezondheid. Ontkoppel die om ${esc(c.n)} te gebruiken.`}</small></div>
       <div class="btns tight"><button class="btn" data-action="wear-off" data-k="${c.k}">Ontkoppelen</button></div></div>`;
   }
@@ -2217,7 +2219,9 @@ function aiRow() {
 const TITLE_FIELDS = ['training', 'structuur', 'km', 'tijd', 'tempo', 'snelheid', 'hr', 'maxhr', 'hoogte', 'cadans', 'dagdeel', 'weekdag', 'datum'];
 // ---- Garmin: herstel (slaap, Body Battery, HRV, gereedheid) en gevoel na een training ----
 const SRC = { apple: 'Apple Gezondheid', garmin: 'Garmin', whoop: 'Whoop', oura: 'Oura', polar: 'Polar', withings: 'Withings', intervals: 'intervals.icu' };
-const srcName = () => SRC[S.settings.health] || 'Garmin';
+const srcName = () => (S.settings.recovery ? `${SRC[S.settings.health] || 'Garmin'} + ${SRC[S.settings.recovery]}` : SRC[S.settings.health] || 'Garmin');
+// herstel in % van Whoop: ook als Whoop naast Garmin je slaap, HRV en herstel levert
+const whoopRec = () => S.settings.health === 'whoop' || S.settings.recovery === 'whoop';
 const hm = (secs) => (secs ? `${Math.floor(secs / 3600)}u${pad(Math.floor((secs % 3600) / 60))}` : '–');
 // gsm zonder horlogegegevens (geen iPhone-app met Apple Gezondheid): Gezondheid en herstel gewoon weglaten
 const noHealthHere = () => WEB() && !S.settings.health && !S.settings.web?.pc && !S.settings.web?.apple && !S.settings.web?.demo;
@@ -2446,7 +2450,7 @@ function renderGarmin(el, rec) {
       ${stat('hrv', 'HRV', t.hrv?.night, 'ms', esc(t.hrv?.status || ''))}
       ${stat('rhr', 'Rust', t.rhr, 'bpm', '')}
       ${t.battery || !r ? stat('bb', 'Battery', t.battery?.now ?? t.battery?.high, '', t.battery?.high != null ? `max ${t.battery.high}` : '')
-        : stat('vo2', S.settings.health === 'whoop' ? 'Herstel' : 'Klaar', r.score, S.settings.health === 'whoop' ? '%' : '', esc(r.level || ''))}
+        : stat('vo2', whoopRec() ? 'Herstel' : 'Klaar', r.score, whoopRec() ? '%' : '', esc(r.level || ''))}
     </button>
     ${tipLine(advice(t))}`;
 }
@@ -2674,7 +2678,7 @@ function healthTiles(rec) {
     [has((d) => d.sleep), mtile('sleep', 'Slaap', t.sleep?.score ?? '–', t.sleep ? `score · ${hm(t.sleep.secs)} geslapen` : 'nog geen slaapdata')],
     [has((d) => d.rhr), mtile('rhr', 'Rusthartslag', t.rhr ? `${t.rhr}<small>bpm</small>` : '–', h.length > 1 ? `gemiddeld ${Math.round(mean(h.map((d) => d.rhr)))} bpm` : '')],
     [has((d) => d.battery), mtile('bb', 'Body Battery', t.battery?.now ?? '–', t.battery ? `nu · hoogste ${t.battery.high}` : '–')],
-    [has((d) => d.readiness), mtile('vo2', S.settings.health === 'whoop' ? 'Herstel' : 'Klaar voor training', t.readiness?.score ?? '–', t.readiness ? esc(t.readiness.level || '') : '')],
+    [has((d) => d.readiness), mtile('vo2', whoopRec() ? 'Herstel' : 'Klaar voor training', t.readiness?.score ?? '–', t.readiness ? esc(t.readiness.level || '') : '')],
     [vo2 != null, mtile('vo2', 'VO2max', vo2 != null ? nlv(vo2) : '–', vd?.status?.label ? `${esc(vd.status.label)}${vd.status.load ? ` · ${esc(vd.status.load)}` : ''}` : '')],
     [has((d) => d.steps), mtile('steps', 'Stappen', t.steps ? nlNum(t.steps.n) : '–', t.steps?.goal ? `van ${nlNum(t.steps.goal)} · ${Math.round((100 * t.steps.n) / t.steps.goal)}%` : '')],
     [has((d) => d.stress), mtile('stress', 'Stress', t.stress ?? '–', t.stress != null ? `gemiddeld vandaag · ${STRESS(t.stress)}` : '')],
@@ -2812,7 +2816,7 @@ function healthDay(rec) {
   const tiles = [
     s && `<div class="mtile c-sleep wide"><div class="label"><i class="mdot"></i>Slaap</div>
       <div class="big">${s.score ?? '–'}<small>${s.score != null ? ' score' : ''}</small> <span class="big-sub">${hm(s.secs)}</span></div>
-      ${sleepStages(s)}${s.resp ? `<div class="muted small">ademhaling ${Math.round(s.resp)}/min</div>` : ''}</div>`,
+      ${sleepStages(s)}${s.resp || s.eff != null ? `<div class="muted small">${[s.resp ? `ademhaling ${Math.round(s.resp)}/min` : '', s.eff != null ? `efficiëntie ${s.eff}%` : '', s.consistency != null ? `regelmaat ${s.consistency}%` : '', s.wakes != null ? `${s.wakes}× wakker` : ''].filter(Boolean).join(' · ')}</div>` : ''}</div>`,
     d.hrv && mtile('hrv', 'HRV', `${d.hrv.night}<small>ms</small>`, esc(cap(d.hrv.status || '')),
       `<div class="trend">${dayDelta(d.hrv.night, avg((x) => x.hrv?.night), true, ' ms')}</div>`),
     d.rhr && mtile('rhr', 'Rusthartslag', `${d.rhr}<small>bpm</small>`, '',
@@ -2823,7 +2827,7 @@ function healthDay(rec) {
       ? mtile('bb', 'Body Battery', `${b.now}<small> nu</small>`,
         d.synced && d.synced.slice(0, 10) === d.date ? `bijgewerkt om ${d.synced.slice(11, 16)}` : '')
       : mtile('bb', 'Body Battery', `${b.low ?? '–'}–${b.high ?? '–'}`, 'laagste – hoogste van die dag')),
-    r && mtile('vo2', S.settings.health === 'whoop' ? 'Herstel' : 'Klaar voor training', `${r.score}${S.settings.health === 'whoop' ? '<small>%</small>' : ''}`,
+    r && mtile('vo2', whoopRec() ? 'Herstel' : 'Klaar voor training', `${r.score}${whoopRec() ? '<small>%</small>' : ''}`,
       esc([r.level, r.recovery_h ? `herstel ${r.recovery_h} u` : ''].filter(Boolean).join(' · '))),
     st && st.vo2max && mtile('vo2', 'VO2max', nlv(st.vo2max), esc([st.label ? `Trainingsstatus: ${st.label}` : '', st.load || ''].filter(Boolean).join(' · ')),
       STATUS_TIP[st.label] ? `<div class="muted small">${esc(STATUS_TIP[st.label])}</div>` : ''),
@@ -2834,12 +2838,16 @@ function healthDay(rec) {
     d.stress != null && d.stress >= 0 && mtile('stress', 'Stress', d.stress, cap(STRESS(d.stress))),
     d.steps && mtile('steps', 'Stappen', nlNum(d.steps.n), [d.steps.goal ? `${Math.round((100 * d.steps.n) / d.steps.goal)}% van ${nlNum(d.steps.goal)}` : '', d.steps.km ? `${km(d.steps.km)} km` : ''].filter(Boolean).join(' · ')),
     d.intensity != null && imTile(d, days, isToday),
+    d.strain != null && mtile('vo2', 'Belasting (strain)', nlv(d.strain), `Whoop-schaal 0–21 · ${d.strain >= 18 ? 'zeer zwaar' : d.strain >= 14 ? 'zwaar' : d.strain >= 10 ? 'gemiddeld' : 'licht'}`),
+    d.skin != null && mtile('rhr', 'Huidtemperatuur', `${nlv(d.skin)}<small>°C</small>`, 'tijdens je slaap',
+      `<div class="trend">${dayDelta(d.skin, avg((x) => x.skin), true, ' °C')}</div>`),
     d.kcal?.total && mtile('steps', 'Calorieën', `${nlNum(d.kcal.total)}<small>kcal</small>`, d.kcal.active ? `${nlNum(d.kcal.active)} actief` : ''),
     bodyAgeTile(),
   ].filter(Boolean);
   const stale = rec.stale ? `<div class="muted small dn-stale">${esc(srcName())} was even niet bereikbaar. Je ziet de laatst opgehaalde gegevens.</div>` : '';
+  const recErr = rec.rec_error ? `<div class="muted small dn-stale">${esc(rec.rec_error)}</div>` : '';
   const lite = d.lite ? '<p class="muted small hintro">Van verder terug bewaart het programma minder details: slaap, HRV, rusthartslag, Body Battery en stappen.</p>' : '';
-  return `${nav}${stale}<div class="dayview" id="dayview"><div class="mtiles health day">${tiles.join('')}</div>${lite}</div>`;
+  return `${nav}${stale}${recErr}<div class="dayview" id="dayview"><div class="mtiles health day">${tiles.join('')}</div>${lite}</div>`;
 }
 
 function vGezondheid() {

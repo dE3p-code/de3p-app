@@ -618,6 +618,7 @@ class Api:
             "garmin": (userdata.DATA / "garmin").is_dir() and any((userdata.DATA / "garmin").iterdir()),
             "wear": {k: wearables.connected(k) for k in wearables.ORDER},
             "health": health_source(),
+            "recovery": wearables.recovery_source(health_source()),
             "body": self.body(),
             "scale": self.scale(),
             "vitals": self.vitals(),
@@ -1298,7 +1299,7 @@ Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
         """Wat de gsm naast de trainingen nodig heeft: koppelingen, gezondheid en berekende kernblokken."""
         import blocks
         s = self.settings()
-        sub = {k: s.get(k) for k in ("athlete", "health", "garmin", "wear", "notion", "plan", "rename", "scopeOk", "version", "goals", "body", "scale", "vitals", "vorm")}
+        sub = {k: s.get(k) for k in ("athlete", "health", "recovery", "garmin", "wear", "notion", "plan", "rename", "scopeOk", "version", "goals", "body", "scale", "vitals", "vorm")}
         # welke wijzigingen van de gsm hier al verwerkt zijn: dan vergeet de gsm ze
         sub["goalsApplied"] = (userdata.read_json(userdata.DATA / "gsm_inbox.json", {}).get("applied") or [])[-300:]
         health = {}
@@ -1517,6 +1518,9 @@ Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
                     except Exception:
                         pass
                 rec = garmin.recovery(days, bool(force), after=_last_start_today())
+                rk = wearables.recovery_source(src)          # Whoop naast Garmin: slaap, HRV en herstel van Whoop
+                if rk:
+                    rec = wearables.overlay(rec, rk, min(days, 45), bool(force))
             else:
                 rec = wearables.recovery(src, days, bool(force))
             import vitals
@@ -1542,6 +1546,9 @@ Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
                         garmin.blood_pressure(force=True)  # bloeddruk gemeten? ook meteen
                 except Exception:
                     pass
+                rk = wearables.recovery_source(src)
+                if rk:
+                    wearables.recovery(rk, 1, True)        # Whoop naast Garmin: ook meteen bijwerken
             else:
                 wearables.recovery(src, 1, True)
         except Exception:
@@ -1555,7 +1562,9 @@ Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
             return None
         try:
             if src == "garmin":
-                return garmin.months(garmin.MONTHS, bool(force))
+                res = garmin.months(garmin.MONTHS, bool(force))
+                rk = wearables.recovery_source(src)
+                return wearables.overlay_months(res, rk, bool(force)) if rk else res
             return wearables.months(src, bool(force))
         except Exception as exc:
             log_error("garmin_months")

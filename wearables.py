@@ -239,10 +239,13 @@ def fetch_whoop(a: dt.date, b: dt.date) -> dict:
         if not d or not secs:
             continue
         sleep_day[s.get("id")] = d
+        pct = lambda key: round(sc[key]) if sc.get(key) is not None else None  # noqa: E731
         days.setdefault(d, {"date": d})["sleep"] = {
-            "score": round(sc["sleep_performance_percentage"]) if sc.get("sleep_performance_percentage") is not None else None,
+            "score": pct("sleep_performance_percentage"),
             "secs": secs, "deep": ms("total_slow_wave_sleep_time_milli"), "light": ms("total_light_sleep_time_milli"),
-            "rem": ms("total_rem_sleep_time_milli"), "awake": ms("total_awake_time_milli"), "resp": sc.get("respiratory_rate")}
+            "rem": ms("total_rem_sleep_time_milli"), "awake": ms("total_awake_time_milli"), "resp": sc.get("respiratory_rate"),
+            "eff": pct("sleep_efficiency_percentage"), "consistency": pct("sleep_consistency_percentage"),
+            "wakes": st.get("disturbance_count")}
     for r in _whoop_all("/recovery", a, b):
         sc = r.get("score") or {}
         d = sleep_day.get(r.get("sleep_id")) or _local_date(r.get("created_at"))
@@ -255,11 +258,19 @@ def fetch_whoop(a: dt.date, b: dt.date) -> dict:
             day["hrv"] = {"night": round(sc["hrv_rmssd_milli"]), "week": None, "status": ""}
         if sc.get("recovery_score") is not None:
             day["readiness"] = {"score": round(sc["recovery_score"]), "level": _level(sc["recovery_score"]), "recovery_h": None}
+        if sc.get("spo2_percentage") is not None:            # zuurstof in je bloed tijdens de slaap
+            day.setdefault("sleep", {"secs": None})["spo2"] = round(sc["spo2_percentage"], 1)
+        if sc.get("skin_temp_celsius") is not None:          # huidtemperatuur tijdens de slaap
+            day["skin"] = round(sc["skin_temp_celsius"], 1)
     for c in _whoop_all("/cycle", a, b):
         sc = c.get("score") or {}
         d = _local_date(c.get("start"), c.get("timezone_offset"))
-        if d and sc.get("kilojoule"):
+        if not d:
+            continue
+        if sc.get("kilojoule"):
             days.setdefault(d, {"date": d})["kcal"] = {"total": round(sc["kilojoule"] / 4.184), "active": None}
+        if sc.get("strain") is not None:                     # Whoop-belasting van die dag, 0–21
+            days.setdefault(d, {"date": d})["strain"] = round(sc["strain"], 1)
     return days
 
 
@@ -442,6 +453,9 @@ def fetch_intervals(a: dt.date, b: dt.date) -> dict:
 
 FETCH = {"whoop": fetch_whoop, "oura": fetch_oura, "polar": fetch_polar, "withings": fetch_withings, "intervals": fetch_intervals}
 WEIGHT = ("withings", "intervals")                       # diensten die ook je gewicht kennen
+# naast Garmin: je horloge registreert je trainingen, deze dienst je slaap, HRV, rusthartslag en herstel
+RECOVERY = ("whoop",)
+REC_KEYS = ("sleep", "hrv", "rhr", "readiness", "skin", "strain")
 
 
 def _week_avg(days: dict) -> None:
@@ -504,6 +518,64 @@ def add_weight(rec: dict, src: str | None, days: int) -> dict:
     return rec
 
 
+def recovery_source(src: str | None) -> str | None:
+    """Welke dienst je slaap, HRV en herstel levert als Gezondheid Garmin gebruikt (Whoop naast Garmin)."""
+    if src != "garmin":
+        return None
+    return next((k for k in RECOVERY if connected(k)), None)
+
+
+def overlay(rec: dict, k: str, days: int, force: bool = False) -> dict:
+    """Garmin + Whoop: per dag de slaap, HRV, rusthartslag en het herstel van Whoop; stappen, Body Battery,
+    stress en VO2max blijven van Garmin. SpO2 of ademhaling die Whoop niet kent, houdt die van Garmin."""
+    if not isinstance(rec, dict) or rec.get("error"):
+        return rec
+    try:
+        got = _ensure(k, dt.date.today() - dt.timedelta(days=max(days, 7) - 1), force).get("days") or {}
+    except Exception as exc:                             # even onbereikbaar: de laatst opgehaalde cijfers tonen
+        name = PROVIDERS[k]["name"]
+        rec["rec_error"] = str(exc) if "opnieuw te koppelen" in str(exc) else \
+            f"{name} was even niet bereikbaar. Je ziet de laatst opgehaalde cijfers van {name}."
+        got = userdata.read_json(_cache(k), {}).get("days") or {}
+    seen = set()
+    for d in [rec.get("today") or {}, *(rec.get("history") or [])]:
+        if id(d) in seen:
+            continue
+        seen.add(id(d))
+        w = got.get(d.get("date"))
+        if not w:
+            continue
+        for key in REC_KEYS:
+            if w.get(key) is None:
+                continue
+            if key == "sleep" and isinstance(d.get("sleep"), dict):
+                mine = {x: y for x, y in w["sleep"].items() if y is not None}
+                d["sleep"] = {**{x: y for x, y in d["sleep"].items() if not (x == "spo2lo" and "spo2" in mine)}, **mine}
+            else:
+                d[key] = w[key]
+    rec["recovery"] = k
+    return rec
+
+
+def overlay_months(res: dict, k: str, force: bool = False) -> dict:
+    """Per maand: slaap, HRV, rusthartslag, SpO2 en herstel van Whoop (waar Whoop die maand iets mat)."""
+    if not isinstance(res, dict) or res.get("error"):
+        return res
+    try:
+        mine = {m["m"]: m for m in (months(k, force).get("months") or [])}
+    except Exception:
+        return res
+    for m in res.get("months") or []:
+        w = mine.get(m["m"])
+        if not w:
+            continue
+        for key in ("score", "secs", "rhr", "hrv", "ready", "spo2"):
+            if key in w["v"]:
+                m["v"][key], m["n"][key] = w["v"][key], w["n"][key]
+    res["recovery"] = k
+    return res
+
+
 def months(k: str, force: bool = False) -> dict:
     import garmin
     first = garmin._month_start(garmin.MONTHS)
@@ -513,7 +585,8 @@ def months(k: str, force: bool = False) -> dict:
     for d, v in (cache.get("days") or {}).items():
         f = {"score": (v.get("sleep") or {}).get("score"), "secs": (v.get("sleep") or {}).get("secs"), "rhr": v.get("rhr"),
              "hrv": (v.get("hrv") or {}).get("night"), "vo2": (v.get("status") or {}).get("vo2max"),
-             "steps": (v.get("steps") or {}).get("n"), "ready": (v.get("readiness") or {}).get("score")}
+             "steps": (v.get("steps") or {}).get("n"), "ready": (v.get("readiness") or {}).get("score"),
+             "spo2": (v.get("sleep") or {}).get("spo2"), "weight": (v.get("weight") or {}).get("kg")}
         flat[d] = {x: y for x, y in f.items() if y is not None}
         if v.get("intensity") is not None:
             mon = (dt.date.fromisoformat(d) - dt.timedelta(days=dt.date.fromisoformat(d).weekday())).isoformat()
