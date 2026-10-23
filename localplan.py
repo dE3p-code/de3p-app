@@ -16,6 +16,7 @@ NAMED_WITH_DETAIL = {"interval", "tempo", "mp", "long"}
 DIST_LABEL = {"marathon": "Marathon", "half": "Halve marathon", "10k": "10 km", "5k": "5 km"}
 MONTHS = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
 PHASE_FOCUS = {
+    "Start": "Lopen en wandelen: elke week loop je wat langer, tot 30 minuten aan één stuk. Op praattempo, wandelen mag altijd.",
     "Basis": "Rustig volume opbouwen: vooral gesprekstempo, met versnellingen voor een soepele pas.",
     "Opbouw": "Kilometers geleidelijk omhoog (max. +10% per week) met één of twee kwaliteitstrainingen.",
     "Herstelweek": "Minder kilometers, zodat je lichaam de opbouw kan verwerken.",
@@ -72,7 +73,7 @@ def short(iso: str) -> str:
 # ---- opzoeken ------------------------------------------------------------------
 def strava_name(day: dict) -> str:
     """'Herstelloop' of 'Tempoduurloop — 2 km IL + 6 km @ 4:03 + 2 km UL'."""
-    if day["kind"] in NAMED_WITH_DETAIL and day.get("detail"):
+    if (day["kind"] in NAMED_WITH_DETAIL or day.get("walk")) and day.get("detail"):
         return f"{day['title']} — {day['detail']}"
     return day["title"]
 
@@ -118,7 +119,7 @@ def ui_weeks(plan: dict | None, today: dt.date) -> list[dict]:
                 "date": d["date"], "title": d["title"], "kind": d["kind"],
                 "structure": d.get("detail", "") if run else "",
                 "km": km_text(d.get("km") or 0) if run else "—",
-                "pace": pace_text(d.get("pace")) or "—",
+                "pace": "—" if d.get("walk") else (pace_text(d.get("pace")) or "—"),   # beginner: tijd telt, niet het tempo
                 "details": "" if run else d.get("detail", ""),
                 "done": False, "rest": not run,
             })

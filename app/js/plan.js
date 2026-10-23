@@ -123,7 +123,7 @@ export function generatePlan(cfg) {
     if (k > 0 && !cut) v = Math.min(peak, v * g);
     const late = k >= nRun - 2;                            // laatste 2 opbouwweken = piek
     const phase = cut ? 'Herstelweek' : late && (nRun >= 3 || t > 0) ? 'Piek'
-      : nRun >= 6 && k < Math.floor(nRun * 0.25) ? 'Basis' : 'Opbouw';
+      : (from != null && k < 4) || (nRun >= 6 && k < Math.floor(nRun * 0.25)) ? 'Basis' : 'Opbouw';
     weeks.push({ km: cut ? v * 0.8 : v, phase, i });
   }
   const reached = Math.max(nRun ? base : 0, ...weeks.map((w) => w.km));

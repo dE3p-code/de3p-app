@@ -63,6 +63,7 @@ const RUN_KINDS = new Set(['recovery', 'easy', 'strides', 'long', 'tempo', 'inte
 const DIST_LABEL = { marathon: 'Marathon', half: 'Halve marathon', '10k': '10 km', '5k': '5 km' };
 const MON = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 const PHASE_FOCUS = {
+  Start: 'Lopen en wandelen: elke week loop je wat langer, tot 30 minuten aan één stuk. Op praattempo, wandelen mag altijd.',
   Basis: 'Rustig volume opbouwen: vooral gesprekstempo, met versnellingen voor een soepele pas.',
   Opbouw: 'Kilometers geleidelijk omhoog (max. +10% per week) met één of twee kwaliteitstrainingen.',
   Herstelweek: 'Minder kilometers, zodat je lichaam de opbouw kan verwerken.',
@@ -94,7 +95,7 @@ export function uiWeeks(plan, today) {
       const run = RUN_KINDS.has(d.kind);
       return {
         date: d.date, title: d.title, kind: d.kind, structure: run ? (d.detail || '') : '',
-        km: run ? kmText(d.km || 0) : '—', pace: paceText(d.pace) || '—', details: run ? '' : (d.detail || ''),
+        km: run ? kmText(d.km || 0) : '—', pace: d.walk ? '—' : (paceText(d.pace) || '—'), details: run ? '' : (d.detail || ''),
         done: false, rest: !run,
       };
     });
