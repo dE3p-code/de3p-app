@@ -71,7 +71,19 @@ export function weekOf(cfg) {
   return [0, 1, 2, 3, 4, 5, 6].map((d) => (d === long ? 'long' : runs.includes(d) ? 'run' : d === cross ? 'cross' : 'rest'));
 }
 
-function layout(cfg) {
+// Twee of meer lange dagen: 'mid' = de andere wordt een middellange duurloop, 'either' = de ene óf
+// de andere (de andere is rust, je mag schuiven), 'alt' = elke week een andere dag.
+export const LONG_MODES = { mid: 'Tweede = middellange loop', either: 'Eén van beide, andere = rust', alt: 'Elke week wisselen' };
+// extra keuzes in het schemaformulier
+export const PLAN_OPTS = {   // [waarde, tekst]; de eerste is de standaard
+  maxMin: { label: 'In de week hooguit', opts: [['', 'Geen grens'], [30, '30 min'], [45, '45 min'], [60, '1 uur'], [75, '1u15'], [90, '1u30']] },
+  maxLong: { label: 'Lange duurloop hooguit', opts: [['', 'Geen grens'], [60, '1 uur'], [90, '1u30'], [120, '2 uur'], [150, '2u30'], [180, '3 uur']] },
+  quality: { label: 'Snelle trainingen', opts: [['both', 'Intervallen + tempo'], ['tempo', 'Enkel tempo'], ['none', 'Geen, alles rustig']] },
+  build: { label: 'Opbouw', opts: [['normal', 'Normaal, +10%/week'], ['easy', 'Voorzichtig, +5%/week']] },
+  cutEvery: { label: 'Herstelweek', opts: [[4, 'Elke 4e week'], [3, 'Elke 3e week']] },
+};
+
+function layout(cfg, wi = 0) {
   const wk = weekOf(cfg);
   const days = (k) => [0, 1, 2, 3, 4, 5, 6].filter((d) => wk[d] === k);
   let longs = days('long');
@@ -80,12 +92,15 @@ function layout(cfg) {
     const l = [6, 5, 4, 3, 2, 1, 0].find((d) => runs.includes(d));
     longs = [l]; runs = runs.filter((d) => d !== l);
   }
-  // meer lange dagen: de eerste in het weekend (of de laatste) is de lange duurloop, de andere een middellange
-  const long = [6, 5].find((d) => longs.includes(d)) ?? longs[longs.length - 1];
-  const mids = longs.filter((d) => d !== long);
+  // meer lange dagen: de eerste in het weekend (of de laatste) is de lange duurloop; de andere volgens longMode
+  const mode = LONG_MODES[cfg.longMode] ? cfg.longMode : 'mid';
+  const main = [6, 5].find((d) => longs.includes(d)) ?? longs[longs.length - 1];
+  const long = mode === 'alt' && longs.length > 1 ? longs[wi % longs.length] : main;
+  const mids = mode === 'mid' ? longs.filter((d) => d !== long) : [];
+  const flex = mode === 'mid' ? [] : longs.filter((d) => d !== long);     // rust, of je lange duurloop als die je beter past
+  const nRun = runs.length + 1 + mids.length;
   const rests = days('rest');
   const crosses = days('cross');
-  const nRun = runs.length + longs.length;
 
   let recovery = null;
   for (let i = 1; i < 7; i += 1) {
@@ -99,7 +114,7 @@ function layout(cfg) {
   if (quality.length < nQual) quality = qualPref.filter((d) => runs.includes(d) && d !== recovery);
   quality = quality.slice(0, nQual).sort((a, b) => a - b);
 
-  return { long, mids, runs, rests, crosses, recovery, quality };
+  return { long, mids, flex, mode, runs, rests, crosses, recovery, quality };
 }
 
 // ---- hoofdfunctie ----------------------------------------------------------
@@ -133,14 +148,15 @@ export function generatePlan(cfg) {
   // opbouw richting piek
   const base = ladder.length ? Math.max(8, walkKm(ladder[ladder.length - 1]) * 3) : Math.max(8, Number(cfg.baseKm) || 30);
   const peak = Math.max(base, Math.min(base * D.peakMul, D.peakCap));
-  const cutWeeks = nRun >= 5 ? Math.floor((nRun - 1) / 4) : 0;
+  const cutEvery = Number(cfg.cutEvery) === 3 ? 3 : 4;
+  const cutWeeks = nRun >= 5 ? Math.floor((nRun - 1) / cutEvery) : 0;
   const steps = Math.max(1, nRun - 1 - cutWeeks);
-  const g = Math.min(1.1, (peak / base) ** (1 / steps));
+  const g = Math.min(cfg.build === 'easy' ? 1.05 : 1.1, (peak / base) ** (1 / steps));
   const weeks = ladder.map((st, i) => ({ km: walkKm(st) * 3, phase: 'Start', walk: st, i }));
   let v = base;
   for (let k = 0; k < nRun; k += 1) {
     const i = ladder.length + k;
-    const cut = nRun >= 5 && (k + 1) % 4 === 0 && k < nRun - 1;
+    const cut = nRun >= 5 && (k + 1) % cutEvery === 0 && k < nRun - 1;
     if (k > 0 && !cut) v = Math.min(peak, v * g);
     const late = k >= nRun - 2;                            // laatste 2 opbouwweken = piek
     const phase = cut ? 'Herstelweek' : late && (nRun >= 3 || t > 0) ? 'Piek'
@@ -152,18 +168,22 @@ export function generatePlan(cfg) {
   const beginner = from != null;
   const walkRace = allWalk && ladder[ladder.length - 1]?.reps;   // nog niet aan één stuk: wedstrijd met wandelen
 
-  const L = layout(cfg);
+  let L = layout(cfg, 0);
   const out = [];
+  const flexDay = (d) => ({ kind: 'rest', km: 0, pace: null,
+    detail: L.mode === 'alt' ? `Rust: deze week is je lange duurloop op ${DAG[L.long]}` : `Rust, of je lange duurloop als die je vandaag beter past dan ${DAG[L.long]}` });
 
   // gewone weken (opbouw + taper)
   weeks.forEach((w, wi) => {
     const monday = addDays(firstMon, wi * 7);
+    L = layout(cfg, wi);
     const days = w.walk ? buildWalkWeek(monday, w.walk) : buildWeek(monday, w, wi);
     // weektotaal = wat er echt in de week staat (zo klopt het getal met de trainingen)
     out.push({ monday, phase: w.phase, km: r05(days.filter(isRunDay).reduce((x, d) => x + d.km, 0)), days });
   });
 
   // wedstrijdweek
+  L = layout(cfg, weeks.length);
   const raceWeekDays = buildRaceWeek(raceMon, reached * D.raceWeek);
   out.push({ monday: raceMon, phase: 'Wedstrijdweek', km: r05(reached * D.raceWeek), days: raceWeekDays });
 
@@ -199,6 +219,7 @@ export function generatePlan(cfg) {
     }
     L.rests.forEach((d) => { byDow[d] = { kind: 'rest', km: 0, pace: null, detail: 'Volledig herstel' }; });
     L.crosses.forEach((d) => { byDow[d] = { kind: 'cross', km: 0, pace: null, detail: '30–45 min rustig' }; });
+    L.flex.forEach((d) => { byDow[d] = flexDay(d); });
     return toDays(monday, byDow);
   }
 
@@ -211,7 +232,13 @@ export function generatePlan(cfg) {
     const cut = w.phase === 'Herstelweek';
 
     // lange duurloop
-    const longKm = r05(clamp(Math.min(vol * D.longShare, vol * 0.5), Math.min(D.longMin, vol * 0.5), D.longCap));
+    let longKm = r05(clamp(Math.min(vol * D.longShare, vol * 0.5), Math.min(D.longMin, vol * 0.5), D.longCap));
+    if (Number(cfg.maxLong) > 0) longKm = Math.min(longKm, r05(Math.max(3, (cfg.maxLong * 60) / zone('long')[1])));
+    // in de week (ma–vr) hooguit maxMin minuten: in km aan je trage rustige tempo
+    const easyMid = (zone('easy')[0] + zone('easy')[1]) / 2;
+    const wkCap = Number(cfg.maxMin) > 0 ? r05(Math.max(2, (cfg.maxMin * 60) / easyMid)) : Infinity;
+    const longMax = Math.min(D.longCap, Number(cfg.maxLong) > 0 ? r05(Math.max(3, (cfg.maxLong * 60) / zone('long')[1])) : Infinity);
+    const capFor = (d) => (d <= 4 && d !== L.long ? wkCap : Infinity);
     const longDay = { kind: 'long', km: longKm, pace: zone('long') };
     if ((late || (taper && isMarathon && wi === weeks.length - t)) && (isMarathon || cfg.distance === 'half')) {
       const fin = r05(longKm * (isMarathon ? 0.25 : 0.2));
@@ -236,25 +263,27 @@ export function generatePlan(cfg) {
     if (nQ === 1) q.splice(0, 2, wi % 2 === 0 ? q[0] : q[1]);
     // weinig kilometers = beginner: nog geen intervallen of tempo, enkel rustig + versnellingen
     // beginner: na de wandel-loopweken eerst nog 4 weken enkel rustig
-    if (vol < 20 || (beginner && w.i < ladder.length + 4)) q.splice(0, q.length, 'strides', 'easy');
+    if (vol < 20 || (beginner && w.i < ladder.length + 4) || cfg.quality === 'none') q.splice(0, q.length, 'strides', 'easy');
+    if (cfg.quality === 'tempo') q.forEach((x, k) => { if (x === 'interval') q[k] = 'tempo'; });
     const shrink = taper ? 0.7 : cut ? 0.8 : 1;
     const wu = vol < 30 ? 1 : 2;                           // in- en uitlopen (km), korter bij weinig volume
     const iu = (km) => `${wu} km IL + ${km} + ${wu} km UL`;
 
     const qualityDays = L.quality.map((d, k) => {
       const kind = q[k] || 'easy';
+      const room = capFor(d) - 2 * wu;                        // past het binnen je tijd in de week?
       if (kind === 'interval') {
-        const reps = Math.round(clamp(vol * 0.1 * shrink, 3, 10));
+        const reps = Math.max(2, Math.min(Math.round(clamp(vol * 0.1 * shrink, 3, 10)), Math.floor(room)));
         return { dow: d, kind, km: reps + 2 * wu, pace: zone('interval'),
           detail: iu(`${reps}×1 km @ ${fmtPace(zone('interval')[0])} (90s rust)`) };
       }
       if (kind === 'tempo') {
-        const tk = r05(clamp(vol * 0.12 * shrink, 2, 12));
+        const tk = Math.max(1, Math.min(r05(clamp(vol * 0.12 * shrink, 2, 12)), r05(room)));
         return { dow: d, kind, km: tk + 2 * wu, pace: zone('tempo'),
           detail: iu(`${fmt(tk)} km @ ${fmtPace(zone('tempo')[0])}`) };
       }
       if (kind === 'mp') {
-        const mk = r05(clamp(vol * 0.15 * shrink, vol < 30 ? 2 : 4, 16));
+        const mk = Math.max(1, Math.min(r05(clamp(vol * 0.15 * shrink, vol < 30 ? 2 : 4, 16)), r05(room)));
         return { dow: d, kind, km: mk + 2 * wu, pace: single(rp), title: mpTitle,
           detail: iu(`${fmt(mk)} km @ ${fmtPace(rp)}`) };
       }
@@ -286,13 +315,13 @@ export function generatePlan(cfg) {
 
     const byDow = {};
     byDow[L.long] = longDay;
-    L.mids.forEach((d) => { byDow[d] = { kind: 'long', title: 'Middellange duurloop', km: midKm, pace: zone('long'), detail: `${fmt(midKm)} km rustig` }; });
+    L.mids.forEach((d) => { const mk = Math.min(midKm, capFor(d)); byDow[d] = { kind: 'long', title: 'Middellange duurloop', km: mk, pace: zone('long'), detail: `${fmt(mk)} km rustig` }; });
     qualityDays.filter((x) => x.km > 0).forEach((x) => { byDow[x.dow] = x; });
     // geen rustige loop langer dan de lange duurloop: herstel hooguit 60%, rustig hooguit 80%
     // ervan. Wat er niet in past, gaat naar lopen met nog ruimte en valt anders weg (liever
     // iets minder dan een te zware week).
     const kms = fillers.map(fillKm);
-    const capOf = (f) => Math.max(minEasy, r05(longDay.km * (f.kind === 'recovery' ? 0.6 : 0.8)));
+    const capOf = (f) => Math.min(capFor(f.dow), Math.max(minEasy, r05(longDay.km * (f.kind === 'recovery' ? 0.6 : 0.8))));
     for (let round = 0; round < 3; round += 1) {
       let over = 0;
       fillers.forEach((f, i) => { const c = capOf(f); if (kms[i] > c) { over += kms[i] - c; kms[i] = c; } });
@@ -300,12 +329,22 @@ export function generatePlan(cfg) {
       if (!over || !room.length) break;
       room.forEach((i) => { kms[i] = r05(kms[i] + over / room.length); });
     }
+    // door je tijdsgrens in de week minder dan gepland? Wat past, gaat naar de lange duurloop
+    if (Number.isFinite(wkCap)) {
+      const planned = longDay.km + L.mids.reduce((x, d) => x + byDow[d].km, 0) + qualityDays.reduce((x, q2) => x + q2.km, 0) + kms.reduce((x, k2) => x + k2, 0);
+      const add = Math.min(vol - planned, longMax - longDay.km, vol * 0.5 - longDay.km);
+      if (add >= 0.5) {
+        longDay.km = r05(longDay.km + add);
+        longDay.detail = longDay.title ? longDay.detail.replace(/^[\d,]+ km/, `${fmt(longDay.km)} km`) : `${fmt(longDay.km)} km rustig`;
+      }
+    }
     fillers.forEach((f, i) => {
       byDow[f.dow] = { kind: f.kind, km: kms[i], pace: zone(f.kind === 'recovery' ? 'recovery' : 'easy'),
         detail: f.detail || '' };
     });
     L.rests.forEach((d) => { byDow[d] = { kind: 'rest', km: 0, pace: null, detail: 'Volledig herstel' }; });
     L.crosses.forEach((d) => { byDow[d] = { kind: 'cross', km: 0, pace: null, detail: '60–90 min rustig' }; });
+    L.flex.forEach((d) => { byDow[d] = flexDay(d); });
 
     return toDays(monday, byDow);
   }
@@ -370,6 +409,8 @@ export function generatePlan(cfg) {
     return days.filter((day) => day.date <= cfg.raceDate || day.kind === 'rest');
   }
 }
+
+const DAG = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
 
 function fmt(km) {
   return String(km).replace('.', ',');

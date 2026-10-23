@@ -12,7 +12,10 @@ for (const [i, week] of all.entries()) {
   if (i % 7) continue;                                       // elke 7e: genoeg variatie, snel
   for (const level of ['km', 'walk']) for (const distance of ['5k', 'marathon']) {
     n += 1;
-    const cfg = { distance, level, goalSec: EASY_GOAL[distance], baseKm: 30, week, startDate: '2026-10-23', raceDate: '2027-02-21' };
+    const pick = (xs) => xs[(i * 7 + n) % xs.length];       // opties door elkaar
+    const opts = { longMode: pick(['mid', 'either', 'alt']), maxMin: pick([null, 30, 45, 60]), maxLong: pick([null, 60, 90, 150]),
+      quality: pick(['both', 'tempo', 'none']), build: pick(['normal', 'easy']), cutEvery: pick([4, 3]) };
+    const cfg = { distance, level, goalSec: EASY_GOAL[distance], baseKm: 30, week, startDate: '2026-10-23', raceDate: '2027-02-21', ...opts };
     let p;
     try { p = generatePlan(cfg); } catch (e) { bad.push(`CRASH ${week} ${e.message}`); continue; }
     const days = p.weeks.flatMap((w) => w.days);
@@ -23,6 +26,8 @@ for (const [i, week] of all.entries()) {
       if (week[dow] === 'rest' && d.kind !== 'rest') bad.push(`${tag}: ${d.date} is rustdag maar ${d.kind}`);
       if (week[dow] === 'cross' && RUN_KINDS.has(d.kind)) bad.push(`${tag}: ${d.date} is fietsdag maar ${d.kind}`);
       if (RUN_KINDS.has(d.kind) && !(d.km > 0)) bad.push(`${tag}: ${d.date} 0 km`);
+      if (opts.quality === 'none' && ['interval', 'tempo'].includes(d.kind) && w.phase !== 'Herstelweek') bad.push(`${tag}: ${d.date} ${d.kind} terwijl geen snelle trainingen`);
+      if (opts.quality === 'tempo' && d.kind === 'interval') bad.push(`${tag}: ${d.date} interval terwijl geen intervallen`);
     }
   }
 }

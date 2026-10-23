@@ -1,5 +1,6 @@
 // dE3p — interface. Data en acties komen van app.py via window.pywebview.api.
-import { generatePlan, DISTANCES, RUN_LEVELS, EASY_GOAL, DAY_KINDS, weekOf } from './js/plan.js';
+import { generatePlan, DISTANCES, RUN_LEVELS, EASY_GOAL, DAY_KINDS, weekOf, LONG_MODES, PLAN_OPTS } from './js/plan.js';
+import { parsePlanNote, applyNote } from './js/plannote.js';
 import { swimPlan, goalPlan, fitToRace, SWIM_GOALS, GOALS, LEVELS, CARDIO } from './js/extra.js';
 import { parseTime, fmtTime } from './js/util.js';
 import { bodyAge } from './js/bodyage.js';
@@ -1141,10 +1142,19 @@ function planFormHtml(inSetup) {
       <select class="input" name="level">${Object.entries(RUN_LEVELS).map(([k, v]) => opt(k, v.label, c.level || 'km')).join('')}</select><small data-level></small></label>
     <label class="field" data-basekm><span class="label">Km per week nu</span>
       <input class="input" type="number" name="baseKm" min="0" max="200" value="${esc(c.baseKm ?? 30)}"><small>Wat loop je de laatste weken gemiddeld?</small></label>
+    <div class="field span3 pn"><span class="label">Zeg het in je eigen woorden · optioneel</span>
+      <textarea class="input" name="note" rows="2" maxlength="400" placeholder="bv. lange duurloop op zaterdag of zondag, woensdag kan ik niet, max 45 minuten in de week">${esc(c.note || '')}</textarea>
+      <div class="btns tight"><button class="btn" type="button" data-action="plan-note">Zet het erin</button></div>
+      <small data-note-out>dE3p zet je dagen en keuzes hieronder voor je klaar. Je kan alles nog aanpassen.</small></div>
     <div class="field span3"><span class="label">Je week</span>
       <div class="wkgrid">${DAYS.map((d, i) => `<div class="wk-row"><span class="wk-d">${cap(d)}</span>
         <div class="seg wk-seg" role="radiogroup" aria-label="${cap(d)}">${DAY_KINDS.map((k) => `<label class="wk-opt"><input type="radio" name="wk${i}" value="${k}"${wk[i] === k ? ' checked' : ''}><span>${WK_LABEL[k]}</span></label>`).join('')}</div></div>`).join('')}</div>
       <small data-week></small></div>
+    <label class="field span3" data-longmode><span class="label">Meer dan één lange dag</span>
+      <select class="input" name="longMode">${Object.entries(LONG_MODES).map(([k, v]) => opt(k, v, c.longMode || 'mid')).join('')}</select></label>
+    <details class="span3 pl-more"${['maxMin', 'maxLong', 'quality', 'build', 'cutEvery'].some((k) => c[k] && !['both', 'normal', 4, '4'].includes(c[k])) ? ' open' : ''}><summary class="label">Meer opties</summary>
+      <div class="form form-3">${Object.entries(PLAN_OPTS).map(([k, o]) => `<label class="field"><span class="label">${o.label}</span>
+        <select class="input" name="${k}">${o.opts.map(([v, l]) => opt(v, l, c[k] ?? o.opts[0][0])).join('')}</select></label>`).join('')}</div></details>
     ${S.settings.plan && !inSetup ? '<div class="note span3">Dit vervangt je huidige schema.</div>' : ''}
     <div class="btns span3 end">${btns}</div>
   </form>`;
@@ -1153,18 +1163,24 @@ function planFormHtml(inSetup) {
 // je week in het schemaformulier: per dag rust, lopen, lange duurloop of fietsen
 const WK_LABEL = { rest: 'Rust', run: 'Lopen', long: 'Lang', cross: 'Fiets' };
 const formWeek = (f) => [0, 1, 2, 3, 4, 5, 6].map((i) => f.get(`wk${i}`) || 'rest');
-function weekCheck(wk) {
+function weekCheck(wk, mode = 'mid') {
   const n = (k) => wk.filter((x) => x === k).length;
-  const runs = n('run') + n('long');
-  if (runs < 2) return { err: 'Kies minstens 2 dagen om te lopen.' };
+  if (n('run') + n('long') < 2) return { err: 'Kies minstens 2 dagen om te lopen.' };
   if (!n('rest')) return { err: 'Hou minstens 1 rustdag: daar word je sterker van.' };
-  const parts = [`${runs} loopdagen`, n('long') ? `${n('long')} lang` : '', `${n('rest')} ${n('rest') === 1 ? 'rustdag' : 'rustdagen'}`, n('cross') ? `${n('cross')}× fietsen` : ''];
   const longs = [0, 1, 2, 3, 4, 5, 6].filter((d) => wk[d] === 'long');
   const main = [6, 5].find((d) => longs.includes(d)) ?? longs[longs.length - 1];          // zoals in plan.js
-  const tip = n('long') > 1 ? ` De lange duurloop is op ${DAYS[main]}; ${longs.filter((d) => d !== main).map((d) => DAYS[d]).join(' en ')} ${n('long') > 2 ? 'worden' : 'wordt'} een middellange duurloop (±70% ervan).`
-    : !n('long') ? ' Geen lange dag gekozen: dan wordt je laatste loopdag van de week de lange duurloop.' : '';
+  const others = joinNames(longs.filter((d) => d !== main).map((d) => DAYS[d]), mode === 'mid' ? 'en' : 'of');
+  const flex = longs.length > 1 && mode !== 'mid';             // de ene óf de andere: de rest is rust
+  const runs = n('run') + (flex ? 1 : n('long'));
+  const rests = n('rest') + (flex ? longs.length - 1 : 0);
+  const parts = [`${runs} keer lopen per week`, `${rests} ${rests === 1 ? 'rustdag' : 'rustdagen'}`, n('cross') ? `${n('cross')}× fietsen of iets anders` : ''];
+  const tip = longs.length < 2 ? (!longs.length ? ' Geen lange dag gekozen: dan wordt je laatste loopdag van de week de lange duurloop.' : '')
+    : mode === 'alt' ? ` De lange duurloop wisselt elke week tussen ${joinNames(longs.map((d) => DAYS[d]), 'en')}; de andere dag is rust.`
+      : mode === 'either' ? ` De lange duurloop staat op ${DAYS[main]}. Past ${others} beter? Doe hem dan daar: de andere dag is rust.`
+        : ` De lange duurloop is op ${DAYS[main]}; ${others} ${longs.length > 2 ? 'worden' : 'wordt'} een middellange duurloop (±70% ervan).`;
   return { ok: `${parts.filter(Boolean).join(' · ')}.${tip}` };
 }
+const joinNames = (xs, w) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} ${w} ${xs[xs.length - 1]}` : xs[0] || '');
 
 function vPlanForm() {
   return `<div class="setup-wrap"><button class="back" data-view="doelen">← Je doelen</button>
@@ -1184,8 +1200,10 @@ function updatePacePreview(form) {
   if (lo) lo.textContent = `${lv.hint} Je doelafstand moet je nog niet kunnen lopen: het schema bouwt rustig op.`;
   const bk = form.querySelector('[data-basekm]');
   if (bk) bk.hidden = lv.from != null;
+  const lm = form.querySelector('[data-longmode]');
+  if (lm) lm.hidden = formWeek(f).filter((x) => x === 'long').length < 2;
   const wo = form.querySelector('[data-week]');
-  if (wo) { const r = weekCheck(formWeek(f)); wo.textContent = r.err || r.ok; wo.classList.toggle('warn', Boolean(r.err)); }
+  if (wo) { const r = weekCheck(formWeek(f), f.get('longMode') || 'mid'); wo.textContent = r.err || r.ok; wo.classList.toggle('warn', Boolean(r.err)); }
 }
 
 async function savePlanForm(form) {
@@ -1204,11 +1222,18 @@ async function savePlanForm(form) {
     level,
     baseKm: level === 'km' ? Number(f.get('baseKm')) : 0,
     week: formWeek(f),
+    longMode: f.get('longMode') || 'mid',
+    maxMin: Number(f.get('maxMin')) || null,
+    maxLong: Number(f.get('maxLong')) || null,
+    quality: f.get('quality') || 'both',
+    build: f.get('build') || 'normal',
+    cutEvery: Number(f.get('cutEvery')) || 4,
+    note: String(f.get('note') || '').trim(),
     startDate: todayIso(),
   };
   cfg.runDays = cfg.week.filter((x) => x === 'run' || x === 'long').length;
   if (!cfg.raceDate || cfg.raceDate <= addDays(cfg.startDate, 6)) return toast('Kies een wedstrijd die minstens een week verder ligt.', 5000);
-  const wc = weekCheck(cfg.week);
+  const wc = weekCheck(cfg.week, cfg.longMode);
   if (wc.err) return toast(wc.err, 5000);
   const plan = generatePlan(cfg);
   try {
@@ -3675,6 +3700,21 @@ document.addEventListener('click', async (e) => {
     if (a === 'web-demo-stop') { await api().demo(false); S.settings = await api().settings(); S.data = null; S.conn = '';
       if (!S.settings.connected) { S.step = 0; S.onboarding = true; return go('setup'); }
       render(); return await doRefresh(); }
+    if (a === 'plan-note') {                            // je eigen woorden → dagen en keuzes in het formulier
+      const form = t.closest('form');
+      const r = parsePlanNote(form.elements.note.value);
+      const out = form.querySelector('[data-note-out]');
+      if (!r.said.length) { out.textContent = 'Nog niet duidelijk. Noem dagen (bv. "zaterdag of zondag lang", "woensdag kan ik niet") of een tijd ("max 45 minuten").'; out.classList.add('warn'); return undefined; }
+      const wk = applyNote(formWeek(new FormData(form)), r);
+      wk.forEach((k, i) => { const x = form.querySelector(`[name="wk${i}"][value="${k}"]`); if (x) x.checked = true; });
+      const set = (k, v) => { if (v != null && form.elements[k]) form.elements[k].value = String(v); };
+      set('longMode', r.longMode); set('maxMin', r.maxMin); set('maxLong', r.maxLong); set('quality', r.quality); set('build', r.build); set('cutEvery', r.cutEvery);
+      if (['maxMin', 'maxLong', 'quality', 'build', 'cutEvery'].some((k) => r[k] != null)) form.querySelector('.pl-more').open = true;
+      out.classList.remove('warn');
+      out.innerHTML = `dE3p begrijpt: <b>${esc(r.said.join(' · '))}</b>. Staat het goed hieronder?`;
+      updatePacePreview(form);
+      return undefined;
+    }
     if (a === 'web-install') { if (!api().install()) toast('Gebruik het menu van je browser: App installeren'); return undefined; }
     if (a === 'pc-takeover') {                          // je computer gaat weg: alles naar deze gsm
       S.takeBusy = true; render();

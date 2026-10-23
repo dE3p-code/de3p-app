@@ -1395,3 +1395,13 @@ a.btn { text-decoration: none; }
 .wk-opt input:focus-visible + span { outline: 2px solid var(--fg); outline-offset: 2px; }
 [data-week].warn { color: var(--danger, #E5484D); }
 @media (max-width: 420px) { .wk-d { min-width: 0; font-size: 14px; } .wk-opt span { padding: 8px 9px; letter-spacing: .04em; } }
+.pn textarea { resize: vertical; min-height: 64px; font: inherit; }
+.pn .btns { margin: 8px 0 4px; }
+[data-note-out].warn { color: var(--danger, #E5484D); }
+.pl-more { border-top: 1px solid var(--border); padding-top: 14px; }
+.pl-more summary { cursor: pointer; list-style: none; }
+.pl-more summary::-webkit-details-marker { display: none; }
+.pl-more summary::after { content: ' +'; }
+.pl-more[open] summary::after { content: ' −'; }
+.pl-more > .form { margin-top: 12px; }
+@media (max-width: 520px) { .pl-more > .form { grid-template-columns: 1fr; } }
