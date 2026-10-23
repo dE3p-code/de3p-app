@@ -1,5 +1,5 @@
 // dE3p — interface. Data en acties komen van app.py via window.pywebview.api.
-import { generatePlan, DISTANCES, RUN_LEVELS, EASY_GOAL } from './js/plan.js';
+import { generatePlan, DISTANCES, RUN_LEVELS, EASY_GOAL, DAY_KINDS, weekOf } from './js/plan.js';
 import { swimPlan, goalPlan, fitToRace, SWIM_GOALS, GOALS, LEVELS, CARDIO } from './js/extra.js';
 import { parseTime, fmtTime } from './js/util.js';
 import { bodyAge } from './js/bodyage.js';
@@ -1123,7 +1123,7 @@ function setupDone() {
 function planFormHtml(inSetup) {
   const c = { ...(S.settings.plan || {}), ...(inSetup ? {} : nonNull(S.planPrefill)) };   // uit je tekst (lokale AI) gaat voor
   const opt = (v, label, sel) => `<option value="${v}" ${String(sel) === String(v) ? 'selected' : ''}>${label}</option>`;
-  const dayOpts = (sel) => DAYS.map((d, i) => opt(i, cap(d), sel)).join('');
+  const wk = weekOf(c);
   const t = todayIso();
   const btns = inSetup
     ? `<button class="btn" type="button" data-step="2">← Vorige</button><button class="btn" type="button" data-step="4">Overslaan, geen schema</button><button class="btn primary" type="submit">Maak mijn schema</button>`
@@ -1141,17 +1141,29 @@ function planFormHtml(inSetup) {
       <select class="input" name="level">${Object.entries(RUN_LEVELS).map(([k, v]) => opt(k, v.label, c.level || 'km')).join('')}</select><small data-level></small></label>
     <label class="field" data-basekm><span class="label">Km per week nu</span>
       <input class="input" type="number" name="baseKm" min="0" max="200" value="${esc(c.baseKm ?? 30)}"><small>Wat loop je de laatste weken gemiddeld?</small></label>
-    <label class="field"><span class="label">Loopdagen per week</span>
-      <select class="input" name="runDays">${[3, 4, 5, 6].map((n) => opt(n, `${n} dagen`, c.runDays ?? 4)).join('')}</select></label>
-    <label class="field"><span class="label">Lange duurloop op</span>
-      <select class="input" name="longDay">${dayOpts(c.longDay ?? 6)}</select></label>
-    <label class="field"><span class="label">Vaste rustdag</span>
-      <select class="input" name="restDay">${dayOpts(c.restDay ?? 4)}</select></label>
-    <label class="field"><span class="label">Fietsen / cross-training</span>
-      <select class="input" name="crossDay">${opt('', 'Geen', c.crossDay ?? '')}${dayOpts(c.crossDay ?? '')}</select></label>
+    <div class="field span3"><span class="label">Je week</span>
+      <div class="wkgrid">${DAYS.map((d, i) => `<div class="wk-row"><span class="wk-d">${cap(d)}</span>
+        <div class="seg wk-seg" role="radiogroup" aria-label="${cap(d)}">${DAY_KINDS.map((k) => `<label class="wk-opt"><input type="radio" name="wk${i}" value="${k}"${wk[i] === k ? ' checked' : ''}><span>${WK_LABEL[k]}</span></label>`).join('')}</div></div>`).join('')}</div>
+      <small data-week></small></div>
     ${S.settings.plan && !inSetup ? '<div class="note span3">Dit vervangt je huidige schema.</div>' : ''}
     <div class="btns span3 end">${btns}</div>
   </form>`;
+}
+
+// je week in het schemaformulier: per dag rust, lopen, lange duurloop of fietsen
+const WK_LABEL = { rest: 'Rust', run: 'Lopen', long: 'Lang', cross: 'Fiets' };
+const formWeek = (f) => [0, 1, 2, 3, 4, 5, 6].map((i) => f.get(`wk${i}`) || 'rest');
+function weekCheck(wk) {
+  const n = (k) => wk.filter((x) => x === k).length;
+  const runs = n('run') + n('long');
+  if (runs < 2) return { err: 'Kies minstens 2 dagen om te lopen.' };
+  if (!n('rest')) return { err: 'Hou minstens 1 rustdag: daar word je sterker van.' };
+  const parts = [`${runs} loopdagen`, n('long') ? `${n('long')} lang` : '', `${n('rest')} ${n('rest') === 1 ? 'rustdag' : 'rustdagen'}`, n('cross') ? `${n('cross')}× fietsen` : ''];
+  const longs = [0, 1, 2, 3, 4, 5, 6].filter((d) => wk[d] === 'long');
+  const main = [6, 5].find((d) => longs.includes(d)) ?? longs[longs.length - 1];          // zoals in plan.js
+  const tip = n('long') > 1 ? ` De lange duurloop is op ${DAYS[main]}; ${longs.filter((d) => d !== main).map((d) => DAYS[d]).join(' en ')} ${n('long') > 2 ? 'worden' : 'wordt'} een middellange duurloop (±70% ervan).`
+    : !n('long') ? ' Geen lange dag gekozen: dan wordt je laatste loopdag van de week de lange duurloop.' : '';
+  return { ok: `${parts.filter(Boolean).join(' · ')}.${tip}` };
 }
 
 function vPlanForm() {
@@ -1172,6 +1184,8 @@ function updatePacePreview(form) {
   if (lo) lo.textContent = `${lv.hint} Je doelafstand moet je nog niet kunnen lopen: het schema bouwt rustig op.`;
   const bk = form.querySelector('[data-basekm]');
   if (bk) bk.hidden = lv.from != null;
+  const wo = form.querySelector('[data-week]');
+  if (wo) { const r = weekCheck(formWeek(f)); wo.textContent = r.err || r.ok; wo.classList.toggle('warn', Boolean(r.err)); }
 }
 
 async function savePlanForm(form) {
@@ -1189,15 +1203,13 @@ async function savePlanForm(form) {
     goalAuto: !typed,
     level,
     baseKm: level === 'km' ? Number(f.get('baseKm')) : 0,
-    runDays: Number(f.get('runDays')),
-    longDay: Number(f.get('longDay')),
-    restDay: Number(f.get('restDay')),
-    crossDay: f.get('crossDay') === '' ? null : Number(f.get('crossDay')),
+    week: formWeek(f),
     startDate: todayIso(),
   };
+  cfg.runDays = cfg.week.filter((x) => x === 'run' || x === 'long').length;
   if (!cfg.raceDate || cfg.raceDate <= addDays(cfg.startDate, 6)) return toast('Kies een wedstrijd die minstens een week verder ligt.', 5000);
-  if (cfg.longDay === cfg.restDay) return toast('Lange duurloop en rustdag vallen op dezelfde dag.', 5000);
-  if (cfg.crossDay !== null && [cfg.longDay, cfg.restDay].includes(cfg.crossDay)) return toast('Kies een andere dag om te fietsen.', 5000);
+  const wc = weekCheck(cfg.week);
+  if (wc.err) return toast(wc.err, 5000);
   const plan = generatePlan(cfg);
   try {
     await api().save_plan(plan);

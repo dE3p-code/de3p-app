@@ -1381,3 +1381,17 @@ svg text.lbl.run { fill: var(--sp-run); } svg text.lbl.ride { fill: var(--sp-rid
 :root[data-theme="light"] .pwrd .pw-dark { display: none; }
 :root[data-theme="light"] .pwrd .pw-light { display: block; }
 a.btn { text-decoration: none; }
+
+/* schemaformulier: je week, per dag rust / lopen / lang / fiets */
+.wkgrid { display: grid; gap: 8px; margin-top: 4px; }
+.wk-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wk-d { font-weight: 600; min-width: 84px; }
+.wk-seg { flex-wrap: nowrap; }
+.wk-opt { position: relative; }
+.wk-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.wk-opt span { display: block; cursor: pointer; padding: 8px 12px; border-radius: 999px; font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) { .wk-opt span:hover { color: var(--fg); } }
+.wk-opt input:checked + span { background: var(--fg); color: var(--bg); }
+.wk-opt input:focus-visible + span { outline: 2px solid var(--fg); outline-offset: 2px; }
+[data-week].warn { color: var(--danger, #E5484D); }
+@media (max-width: 420px) { .wk-d { min-width: 0; font-size: 14px; } .wk-opt span { padding: 8px 9px; letter-spacing: .04em; } }
