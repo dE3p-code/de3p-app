@@ -22,7 +22,7 @@ from pathlib import Path
 
 APP_NAME = "dE3p"
 OLD_NAME = "dE3p Strava Sync"          # vroegere naam: bestaande mappen blijven gewoon in gebruik
-VERSION = "2.19.0"
+VERSION = "2.19.1"
 
 FROZEN = bool(getattr(sys, "frozen", False))
 CODE = Path(__file__).resolve().parent

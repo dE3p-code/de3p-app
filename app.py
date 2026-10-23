@@ -264,7 +264,16 @@ def is_connected() -> bool:
     if userdata.LEGACY:
         return True                            # sleutels staan in .env
     f = userdata.load()
-    return bool(f.get("client_id") and f.get("client_secret") and f.get("refresh_token"))
+    return bool(f.get("client_id") and (f.get("client_secret") or f.get("strava_shared")) and f.get("refresh_token"))
+
+
+def shared_client_id() -> str | None:
+    """Client ID van de gedeelde dE3p-sleutel als die open staat (anders None: dan een eigen sleutel)."""
+    try:
+        r = requests.get(db.ss.SHARED_CONFIG_URL if db.ss else "https://www.de3p.be/api/strava/config", timeout=6)
+        return (r.json() or {}).get("clientId") if r.ok else None
+    except Exception:
+        return None
 
 
 def scope_ok(scope: str) -> bool:
@@ -594,6 +603,7 @@ class Api:
             "connected": is_connected(), "legacy": userdata.LEGACY,
             "athlete": f.get("athlete", ""), "scopeOk": userdata.LEGACY or scope_ok(f.get("scope", "")),
             "clientId": f.get("client_id", ""),
+            "sharedStrava": self._shared_open(), "stravaShared": bool(f.get("strava_shared")),
             "rename": bool(f.get("rename", True)), "cardsDir": str(cards_root()),
             "notion": notion, "plan": (plan or {}).get("config"), "goals": localextra.goals(),
             "platform": sys.platform, "version": userdata.VERSION, "dataDir": str(userdata.DATA),
@@ -660,15 +670,30 @@ class Api:
             self._lock.release()
 
     # ---- Strava koppelen ------------------------------------------------------
-    def strava_connect(self, client_id: str, client_secret: str) -> dict:
+    def _shared_open(self) -> bool:
+        """Staat de gedeelde dE3p-sleutel open? 10 minuten onthouden (settings() wordt vaak gevraagd)."""
+        now = time.time()
+        if now - getattr(self, "_shared_at", 0) > 600:
+            self._shared_id, self._shared_at = (None if userdata.LEGACY else shared_client_id()), now
+        return bool(self._shared_id)
+
+    def strava_connect_shared(self, reconnect: bool = False) -> dict:
+        """Koppelen met de gedeelde dE3p-sleutel: geen eigen Strava-sleutel (en dus geen abonnement) nodig."""
+        cid = shared_client_id()
+        if not cid:
+            raise RuntimeError("Inloggen met de dE3p-sleutel staat nog niet open. Maak voorlopig je eigen Strava-sleutel.")
+        return self.strava_connect(cid, "", shared=True)
+
+    def strava_connect(self, client_id: str, client_secret: str, shared: bool = False) -> dict:
         """Browser opent Strava → gebruiker keurt goed → Strava stuurt terug naar
-        http://localhost:8721/callback → code omwisselen voor een refresh token."""
+        http://localhost:8721/callback → code omwisselen voor een refresh token.
+        shared: de gedeelde dE3p-sleutel; de site vult het geheim in bij het omwisselen."""
         if userdata.LEGACY:
             raise RuntimeError("In de ontwikkelmap komen de Strava-sleutels uit .env.")
         cid, sec = str(client_id).strip(), str(client_secret).strip()
         if not cid.isdigit():
             raise RuntimeError("De Client ID bestaat enkel uit cijfers.")
-        if len(sec) < 20:
+        if not shared and len(sec) < 20:
             raise RuntimeError("Die Client Secret lijkt niet volledig: kopieer hem opnieuw.")
 
         state, got, done = secrets.token_urlsafe(16), {}, threading.Event()
@@ -723,14 +748,19 @@ class Api:
         if "error" in got:
             raise RuntimeError(got["error"])
 
-        r = requests.post(TOKEN_URL, data={"client_id": cid, "client_secret": sec, "code": got["code"],
-                                           "grant_type": "authorization_code"}, timeout=30)
+        body = {"client_id": cid, "code": got["code"], "grant_type": "authorization_code"}
+        if not shared:
+            body["client_secret"] = sec
+        r = requests.post("https://www.de3p.be/api/strava/oauth/token" if shared else TOKEN_URL, data=body, timeout=30)
         if r.status_code in (400, 401, 403):
-            raise RuntimeError("Strava weigert de sleutel: controleer je Client ID en Client Secret.")
+            if shared and "limit" in r.text.lower():
+                raise RuntimeError("Strava laat de dE3p-sleutel nog maar een paar sporters koppelen. Probeer later opnieuw.")
+            raise RuntimeError("Strava weigert de koppeling. Probeer opnieuw." if shared
+                               else "Strava weigert de sleutel: controleer je Client ID en Client Secret.")
         r.raise_for_status()
         data = r.json()
         athlete = (data.get("athlete") or {}).get("firstname", "")
-        userdata.update(client_id=cid, client_secret=sec, refresh_token=data["refresh_token"],
+        userdata.update(client_id=cid, client_secret=sec, strava_shared=bool(shared), refresh_token=data["refresh_token"],
                         athlete=athlete, athlete_id=(data.get("athlete") or {}).get("id"), scope=got["scope"])
         userdata.STATE.unlink(missing_ok=True)   # nieuwe koppeling = nieuwe start
         self._cfg = None

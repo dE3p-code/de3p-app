@@ -44,6 +44,9 @@ STATE_PATH = userdata.STATE
 LOG_DIR = userdata.LOGS
 
 STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
+# Gedeelde dE3p-sleutel: het geheim staat enkel op de server, die het bij de token-aanvraag invult
+SHARED_TOKEN_URL = "https://www.de3p.be/api/strava/oauth/token"
+SHARED_CONFIG_URL = "https://www.de3p.be/api/strava/config"
 STRAVA_API = "https://www.strava.com/api/v3"
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
@@ -100,7 +103,8 @@ def load_config() -> dict:
         "rename_unplanned": legacy,
         "write_description": legacy,
     }
-    missing = [k for k in ("client_id", "client_secret", "refresh_token") if not cfg[k]]
+    need = ("client_id", "refresh_token") if f.get("strava_shared") and not legacy else ("client_id", "client_secret", "refresh_token")
+    missing = [k for k in need if not cfg[k]]
     if missing:
         raise SystemExit("Strava is nog niet gekoppeld." if not legacy else
                          f"Ontbrekende Strava-config in .env: {', '.join(missing)} (run get_strava_token.py)")
@@ -147,12 +151,11 @@ def update_env_var(key: str, value: str) -> None:
 # Strava
 # --------------------------------------------------------------------------- #
 def strava_access_token(cfg: dict) -> str:
-    r = requests.post(STRAVA_TOKEN_URL, data={
-        "client_id": cfg["client_id"],
-        "client_secret": cfg["client_secret"],
-        "grant_type": "refresh_token",
-        "refresh_token": cfg["refresh_token"],
-    }, timeout=30)
+    shared = not cfg.get("client_secret")              # gedeelde dE3p-sleutel (geen eigen Strava-abonnement nodig)
+    data = {"client_id": cfg["client_id"], "grant_type": "refresh_token", "refresh_token": cfg["refresh_token"]}
+    if not shared:
+        data["client_secret"] = cfg["client_secret"]
+    r = requests.post(SHARED_TOKEN_URL if shared else STRAVA_TOKEN_URL, data=data, timeout=30)
     r.raise_for_status()
     data = r.json()
     new_refresh = data.get("refresh_token")

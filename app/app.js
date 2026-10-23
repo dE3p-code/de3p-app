@@ -998,19 +998,21 @@ async function pairSubmit(form) {
 }
 
 function setupShared() {
+  const web = WEB();
   return `<section class="panel setup">
-    <p class="lead">Log in met je Strava-account. dE3p mag dan je trainingen lezen (ook privé) en de naam van een training aanpassen. Je gegevens blijven op deze gsm.</p>
+    <p class="lead">Log in met je Strava-account, ook een gratis account is genoeg. dE3p mag dan je trainingen lezen (ook privé) en de naam van een training aanpassen. Je gegevens blijven op ${web ? 'deze gsm' : 'deze computer'}.</p>
     ${S.setupError ? `<div class="alert">${esc(S.setupError)}</div>` : ''}
-    ${S.connecting ? `<div class="waiting"><span class="spinner"></span> ${S.settings.web?.ios ? 'Strava opent in Safari. Tik op <i>Authorize</i> en open daarna dE3p weer via het icoon op je beginscherm.' : 'Wacht op Strava… Keur goed en kom daarna terug.'}</div>` : ''}
+    ${S.connecting ? `<div class="waiting"><span class="spinner"></span> ${S.settings.web?.ios ? 'Strava opent in Safari. Tik op <i>Authorize</i> en open daarna dE3p weer via het icoon op je beginscherm.' : web ? 'Wacht op Strava… Keur goed en kom daarna terug.' : 'Je browser opent Strava. Klik op <i>Authorize</i> en kom daarna terug naar dit venster.'}</div>
+      ${web ? '' : '<div class="btns"><button class="btn" data-action="cancel-connect">Annuleren</button></div>'}` : ''}
     <div class="btns"><button class="btn big strava" data-action="strava-shared" ${S.connecting ? 'disabled' : ''}>Koppel met Strava</button></div>
-    <p class="muted small" style="margin:14px 0 0">Liever je eigen Strava-sleutel? <button class="link-btn" data-action="own-key">Maak je eigen sleutel</button></p>
-    ${S.reconnect ? '' : '<p class="muted small" style="margin:8px 0 0">Heb je dE3p op je computer? <button class="link-btn" data-step="pc">Koppel met je computer</button></p>'}
-    <div class="btns end">${S.reconnect ? '' : '<button class="btn" data-step="intro">← Vorige</button>'}</div>
+    <p class="muted small" style="margin:14px 0 0">Heb je een Strava-abonnement en wil je liever je eigen sleutel? <button class="link-btn" data-action="own-key">Maak je eigen sleutel</button></p>
+    ${web && !S.reconnect ? '<p class="muted small" style="margin:8px 0 0">Heb je dE3p op je computer? <button class="link-btn" data-step="pc">Koppel met je computer</button></p>' : ''}
+    ${web && !S.reconnect ? '<div class="btns end"><button class="btn" data-step="intro">← Vorige</button></div>' : ''}
   </section>`;
 }
 function setupKey() {
   const web = WEB();
-  if (web && S.settings.web?.sharedStrava && !S.ownKey) return setupShared();
+  if ((web ? S.settings.web?.sharedStrava : S.settings.sharedStrava) && !S.ownKey) return setupShared();   // dE3p-sleutel: geen eigen Strava-abonnement nodig
   const form = web ? [['Application Name', 'dE3p', true], ['Category', 'Training (maakt niet uit)', false], ['Club', 'leeg laten', false],
     ['Website', 'https://www.de3p.be', true], ['Application Description', 'mag leeg blijven', false],
     ['Authorization Callback Domain', S.settings.web?.callback || 'www.de3p.be', true]] : STRAVA_FORM;
@@ -1018,7 +1020,7 @@ function setupKey() {
       <span class="k">${k}</span><span class="v">${esc(v)}</span>
       ${copy ? `<button class="copy" data-copy="${esc(v)}">Kopieer</button>` : '<span></span>'}</div>`).join('');
   return `<section class="panel setup">
-    <p class="lead">Strava laat elk programma werken met een eigen sleutel. Die maak je één keer, gratis, in een paar minuten. Zo blijven je gegevens van jou: ze gaan rechtstreeks van Strava naar ${web ? 'deze gsm' : 'deze computer'}.</p>
+    <p class="lead">Met een eigen Strava-sleutel gaan je gegevens rechtstreeks van Strava naar ${web ? 'deze gsm' : 'deze computer'}. Die maak je één keer, in een paar minuten. <b>Let op:</b> sinds juni 2026 kan dat enkel met een betaald Strava-abonnement.${(web ? S.settings.web?.sharedStrava : S.settings.sharedStrava) ? ' Geen abonnement? <button class="link-btn" data-action="shared-key">Log gewoon in met Strava</button>.' : ''}</p>
     <ol class="todo">
       <li><b>Open de Strava-pagina voor ontwikkelaars</b> en log in met je gewone Strava-account.
         <div class="btns"><button class="btn primary" data-action="strava-api">Open strava.com/settings/api</button></div></li>
@@ -3604,6 +3606,7 @@ document.addEventListener('click', async (e) => {
     }
     if (a === 'strava-shared') return connectShared();
     if (a === 'own-key') { S.ownKey = true; S.setupError = ''; render(); return undefined; }
+    if (a === 'shared-key') { S.ownKey = false; S.setupError = ''; render(); return undefined; }
     if (a === 'web-strava') { S.reconnect = true; S.step = 1; S.setupError = ''; return go('setup'); }
     if (a === 'web-unpair') { await api().unpair_pc(); S.settings = await api().settings(); S.data = null; toast('Ontkoppeld van je computer');
       if (!S.settings.connected) { S.step = 0; S.onboarding = true; return go('setup'); }
