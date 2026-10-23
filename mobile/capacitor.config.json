@@ -1,0 +1,10 @@
+{
+  "appId": "be.de3p.app",
+  "appName": "dE3p",
+  "webDir": "www",
+  "backgroundColor": "#0A0A0A",
+  "ios": {
+    "contentInset": "never",
+    "scheme": "dE3p"
+  }
+}

@@ -1,0 +1,621 @@
+<title>Handleiding dE3p</title>
+<style>
+@font-face { font-family: 'Archivo'; src: url({{font:archivo}}) format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }
+@font-face { font-family: 'Martian Mono'; src: url({{font:martian}}) format('woff2'); font-weight: 100 800; font-display: swap; }
+/* Zwart-wit zoals het programma en de recap-kaarten. Volgt de browser: donker of licht. */
+:root {
+  color-scheme: dark;
+  --bg: #0A0A0A; --panel: #141414; --panel2: #1A1A1A; --line: #222; --border: #2E2E2E;
+  --fg: #FAFAFA; --soft: #CFCFCF; --muted: #8E8E8E; --dim: #5C5C5C;
+  --sans: 'Archivo', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'Martian Mono', 'Cascadia Mono', ui-monospace, Consolas, monospace;
+  --code: #1F1F1F; --logo-invert: 0;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #FFFFFF; --panel: #F5F5F5; --panel2: #F0F0F0; --line: #E7E7E7; --border: #D5D5D5;
+    --fg: #0A0A0A; --soft: #333333; --muted: #6B6B6B; --dim: #A3A3A3;
+    --code: #F1F1F1; --logo-invert: 1;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 16.5px/1.62 var(--sans); -webkit-font-smoothing: antialiased; }
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--fg); text-decoration: underline; text-decoration-color: var(--dim); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--fg); }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; border-radius: 4px; }
+b, strong { font-weight: 700; color: var(--fg); }
+i { font-style: normal; font-weight: 600; color: var(--fg); }
+code { font: 500 .84em var(--mono); background: var(--code); border: 1px solid var(--border); padding: 1px 7px; border-radius: 6px; color: var(--fg); white-space: nowrap; }
+.label { font: 500 11px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0; }
+
+/* Eén pagina voor vier toestellen: enkel wat bij het gekozen toestel hoort, is zichtbaar. */
+html[data-os="win"] [data-for]:not([data-for~="win"]),
+html[data-os="mac"] [data-for]:not([data-for~="mac"]),
+html[data-os="iphone"] [data-for]:not([data-for~="iphone"]),
+html[data-os="android"] [data-for]:not([data-for~="android"]) { display: none !important; }
+
+.wrap { max-width: 1160px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 40px); }
+.top { border-bottom: 1px solid var(--line); }
+.top-in { display: flex; align-items: center; gap: 18px; padding-block: 18px; }
+.top .logo { width: 88px; filter: invert(var(--logo-invert)); }
+.top .ver { margin-left: auto; }
+
+/* ---- opening -------------------------------------------------------- */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: clamp(28px, 6vw, 72px); align-items: center; padding-block: clamp(36px, 6vw, 72px); }
+.hero h1 { font: 800 clamp(42px, 6.6vw, 84px)/.92 var(--sans); font-stretch: 125%; letter-spacing: -.035em; margin: 14px 0 20px; text-wrap: balance; }
+.lead { font-size: clamp(17px, 1.6vw, 20px); line-height: 1.55; color: var(--soft); max-width: 58ch; margin: 0; }
+.needs { list-style: none; padding: 0; margin: 30px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--border); }
+.needs li { padding: 16px 18px 0 0; display: grid; gap: 2px; }
+.needs li + li { padding-left: 18px; border-left: 1px solid var(--line); }
+.needs b { font-size: 16px; }
+.needs span { font-size: 14px; color: var(--muted); }
+.hero-card { margin: 0; justify-self: end; width: 100%; }
+.hero-card img { border-radius: 16px; border: 1.5px solid var(--border); aspect-ratio: 9 / 16; width: 100%; }
+.hero-card figcaption { margin-top: 10px; text-align: center; }
+
+/* ---- toestel kiezen ---- */
+.pick-q { margin-top: 30px; }
+.pick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.pick button { appearance: none; cursor: pointer; display: grid; justify-items: center; gap: 8px; padding: 16px 8px 14px; border-radius: 16px;
+  border: 1.5px solid var(--border); background: var(--panel); color: var(--soft); font: 700 15px var(--sans); }
+.pick button:hover { border-color: var(--fg); color: var(--fg); }
+.pick button[aria-checked="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.pick svg { width: 30px; height: 30px; }
+.pick-sub { margin: 10px 0 0; color: var(--muted); font-size: 14px; }
+
+/* ---- inhoud + tekst ------------------------------------------------------ */
+.layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: clamp(28px, 5vw, 64px); align-items: start; padding-bottom: 90px; }
+.toc { position: sticky; top: 24px; display: grid; gap: 12px; padding-top: 6px; }
+.toc ol, .toc ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.toc ol { counter-reset: toc; }
+.toc a { display: block; padding: 7px 10px; border-radius: 9px; text-decoration: none; color: var(--muted); font-size: 14.5px; }
+.toc ol a::before { counter-increment: toc; content: counter(toc); display: inline-block; width: 18px; font: 600 12px var(--mono); color: var(--dim); }
+.toc a:hover, .toc a.on { color: var(--fg); background: var(--panel); }
+.toc ul { border-top: 1px solid var(--line); padding-top: 10px; }
+
+.doc { max-width: 790px; min-width: 0; }
+.doc > section { padding-top: 44px; margin-top: 56px; border-top: 1px solid var(--line); scroll-margin-top: 8px; }
+.doc > .first { margin-top: 0; border-top: 0; padding-top: 0; }
+.doc p, .doc li { color: var(--soft); }
+.doc p { max-width: 68ch; margin: 14px 0 0; }
+h2 { font: 800 clamp(26px, 3vw, 34px)/1.08 var(--sans); font-stretch: 118%; letter-spacing: -.015em; margin: 6px 0 0; text-wrap: balance; }
+h3 { font: 700 20px/1.25 var(--sans); margin: 40px 0 0; }
+.step-h { display: flex; gap: 18px; align-items: center; }
+.num { flex: none; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--fg); color: var(--bg); font: 800 21px var(--sans); font-stretch: 118%; }
+
+.kv { margin-top: 14px; border: 1.5px solid var(--border); border-radius: 14px; overflow: hidden; }
+.kv-row { display: grid; grid-template-columns: minmax(0, 230px) minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 11px 14px; border-top: 1px solid var(--line); }
+.kv-row:first-child { border-top: 0; }
+.kv-row .k { font: 500 11.5px/1.4 var(--mono); color: var(--muted); }
+.kv-row .v { color: var(--fg); font-weight: 600; overflow-wrap: anywhere; }
+.kv-row.key { background: var(--panel2); }
+.kv-row.key .k { color: var(--fg); }
+.copy { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); background: none; border: 1.5px solid var(--border); border-radius: 999px; padding: 6px 11px; cursor: pointer; }
+.copy:hover { border-color: var(--fg); color: var(--fg); }
+
+.note { margin-top: 20px; padding: 14px 16px; border-left: 3px solid var(--fg); background: var(--panel2); border-radius: 0 12px 12px 0; }
+.note p { margin: 0; }
+.aside { color: var(--muted) !important; font-size: 15px; }
+
+.faq { margin-top: 18px; border-top: 1px solid var(--line); }
+.faq details { border-bottom: 1px solid var(--line); }
+.faq summary { cursor: pointer; list-style: none; padding: 15px 34px 15px 0; position: relative; font-weight: 700; font-size: 16.5px; color: var(--fg); }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: '+'; position: absolute; right: 4px; top: 12px; font: 500 20px var(--mono); color: var(--muted); }
+.faq details[open] summary::after { content: '–'; }
+.faq details > p { margin: 0 0 16px; }
+
+.dl { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.dl-knop { display: inline-flex; align-items: center; gap: 10px; padding: 15px 22px; border-radius: 999px; background: var(--fg); color: var(--bg); text-decoration: none; font-weight: 700; font-size: 16px; }
+.dl-knop:hover { opacity: .88; }
+.dl-knop small { font: 500 11px var(--mono); letter-spacing: .06em; opacity: .7; }
+.dl-meer { width: 100%; margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.qr { display: flex; gap: 16px; align-items: center; margin-top: 18px; padding: 14px; border: 1.5px solid var(--border); border-radius: 16px; max-width: 430px; }
+.qr svg { width: 112px; height: 112px; flex: none; border-radius: 8px; }
+.qr p { margin: 0; font-size: 14.5px; color: var(--soft); }
+.film { padding-bottom: clamp(40px, 6vw, 72px); }
+.film video { width: 100%; border-radius: 16px; border: 1.5px solid var(--border); background: #000; aspect-ratio: 16 / 9; }
+.film figcaption { margin-top: 10px; }
+
+.foot { border-top: 1px solid var(--line); padding-block: 26px 40px; display: flex; flex-wrap: wrap; gap: 8px 22px; justify-content: space-between; }
+
+/* ---- prentjes: één stap = één zin + één prentje ---- */
+.howto { padding: 16px 18px; border: 1.5px solid var(--border); border-radius: 16px; background: var(--panel); margin-bottom: 8px; }
+.howto p { margin: 0; }
+.red { color: #FF3B30; font-weight: 700; }
+.say1 { font-size: 18px; color: var(--soft); }
+.os-h { display: inline-block; margin-top: 34px; padding: 6px 14px; border-radius: 999px; background: var(--fg); color: var(--bg); font: 700 13px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+ol.steps { list-style: none; counter-reset: st; padding: 0; margin: 20px 0 0; display: grid; gap: 22px; }
+ol.steps > li { counter-increment: st; border: 1.5px solid var(--border); border-radius: 20px; background: var(--panel); padding: 18px; }
+ol.steps > li > p.do { display: flex; gap: 14px; align-items: center; margin: 0 0 14px; max-width: none; font-size: clamp(17px, 1.8vw, 20px); line-height: 1.3; font-weight: 700; color: var(--fg); }
+ol.steps > li > p.do::before { content: counter(st); flex: none; width: 42px; height: 42px; border-radius: 50%; background: var(--fg); color: var(--bg); display: grid; place-items: center; font: 800 19px var(--sans); }
+ol.steps img, img.pic { border-radius: 14px; border: 1.5px solid var(--border); background: var(--bg); width: 100%; }
+img.pic, .appwin.pic { margin-top: 16px; }
+ol.steps .why { margin: 12px 0 0; color: var(--muted); font-size: 15.5px; }
+ol.steps .kv { margin-top: 14px; }
+.done-box { margin-top: 24px; text-align: center; padding: 26px 20px; border: 1.5px solid var(--fg); border-radius: 20px; }
+.done-box p { margin: 0 auto; }
+.done-box .big { font: 800 34px var(--sans); font-stretch: 112%; color: var(--fg); margin-bottom: 6px; }
+ol.daily { list-style: none; counter-reset: d; padding: 0; margin: 20px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+ol.daily li { counter-increment: d; display: grid; gap: 6px; align-content: start; padding: 18px; border: 1.5px solid var(--border); border-radius: 18px; background: var(--panel); color: var(--soft); font-size: 15px; }
+ol.daily li::before { content: counter(d); width: 36px; height: 36px; border-radius: 50%; background: var(--fg); color: var(--bg); display: grid; place-items: center; font: 800 17px var(--sans); }
+ol.daily b { font-size: 17px; }
+ol.legend { list-style: none; counter-reset: lg; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
+ol.legend li { counter-increment: lg; position: relative; padding: 3px 0 3px 44px; color: var(--soft); font-size: 16.5px; }
+ol.legend li::before { content: counter(lg); position: absolute; left: 0; top: 1px; width: 30px; height: 30px; border-radius: 50%; background: #FF3B30; color: #fff; display: grid; place-items: center; font: 800 15px var(--sans); }
+
+/* Schermen van het programma in een venster van Windows of van de Mac */
+.appwin { border-radius: 8px; overflow: hidden; border: 1.5px solid var(--border); background: #0A0A0A; }
+.appwin img, ol.steps .appwin img { border: 0; border-radius: 0; }
+.appwin .tb { height: 34px; display: flex; align-items: center; gap: 9px; padding-left: 12px; background: #202020; color: #D9D9D9; font: 400 12.5px 'Segoe UI', system-ui, sans-serif; }
+.appwin .tb::before { content: ''; width: 16px; height: 16px; border-radius: 4px; background: #000 url({{img:logo}}) center / 13px auto no-repeat; box-shadow: inset 0 0 0 1px #444; }
+.appwin .tb::after { content: ''; margin-left: auto; width: 138px; height: 34px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='138' height='34'%3E%3Cg stroke='%23D9D9D9' fill='none'%3E%3Cpath d='M18 17.5h10'/%3E%3Crect x='64.5' y='12.5' width='9' height='9' rx='1.5'/%3E%3Cpath d='M110 12l10 10M120 12l-10 10'/%3E%3C/g%3E%3C/svg%3E") no-repeat; }
+html[data-os="mac"] .appwin { border-radius: 12px; }
+html[data-os="mac"] .appwin .tb { justify-content: center; position: relative; height: 32px; background: #2A2A2A; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; font-weight: 600; color: #BDBDBD; }
+html[data-os="mac"] .appwin .tb::before { position: absolute; left: 12px; top: 10px; width: 52px; height: 12px; border-radius: 0; box-shadow: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='52' height='12'%3E%3Ccircle cx='6' cy='6' r='6' fill='%23FF5F57'/%3E%3Ccircle cx='26' cy='6' r='6' fill='%23FEBC2E'/%3E%3Ccircle cx='46' cy='6' r='6' fill='%2328C840'/%3E%3C/svg%3E") no-repeat; }
+html[data-os="mac"] .appwin .tb::after { display: none; }
+
+/* Gsm-prentjes: staand, naast elkaar op een groot scherm */
+.phones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.phones img, ol.steps .phones img { border: 0; border-radius: 14px; background: none; }
+.phones.one { grid-template-columns: minmax(0, 360px); justify-content: center; }
+img.tour { border: 0; border-radius: 14px; background: var(--panel); margin-top: 16px; }
+
+@media (max-width: 720px) { ol.daily { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .toc { position: static; border: 1.5px solid var(--border); border-radius: 14px; padding: 14px; }
+  .toc ol, .toc ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .qr { display: none; }
+}
+@media (max-width: 720px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .hero-card { display: none; }
+  .pick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .needs { grid-template-columns: minmax(0, 1fr); }
+  .needs li, .needs li + li { padding: 12px 0; border-left: 0; border-bottom: 1px solid var(--line); }
+  .kv-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .kv-row .k { grid-column: 1 / -1; }
+  .toc ol, .toc ul { grid-template-columns: minmax(0, 1fr); }
+  .phones { grid-template-columns: minmax(0, 320px); justify-content: center; }
+}
+</style>
+<script>
+  // Toestel: gekozen (onthouden), of geraden uit de browser. Vóór het tekenen, zodat niets verspringt.
+  (function () {
+    var os = '';
+    try { os = new URLSearchParams(location.search).get('toestel') || localStorage.getItem('de3p-toestel') || ''; } catch (e) { os = ''; }
+    if (!/^(win|mac|iphone|android)$/.test(os)) {
+      var ua = navigator.userAgent;
+      os = /iPhone|iPod|iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'iphone'
+        : /Android/.test(ua) ? 'android' : /Macintosh|Mac OS X/.test(ua) ? 'mac' : 'win';
+    }
+    document.documentElement.setAttribute('data-os', os);
+  })();
+</script>
+
+<header class="top">
+  <div class="wrap top-in">
+    <img class="logo" src="{{img:logo}}" alt="dE3p" width="240" height="104">
+    <p class="label">Handleiding</p>
+    <p class="label ver">Versie {{version}}</p>
+  </div>
+</header>
+
+<section class="wrap hero">
+  <div>
+    <p class="label">Gratis · Windows · Mac · iPhone · Android</p>
+    <h1>dE3p</h1>
+    <p class="lead">Je trainingen van Strava, met een mooie kaart van elke training. <b>Volg de prentjes:</b> in 10 minuten klaar.</p>
+
+    <p class="label pick-q">Wat gebruik je?</p>
+    <div class="pick" role="radiogroup" aria-label="Kies je toestel">
+      <button type="button" role="radio" id="os-win" data-os="win" aria-checked="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="1"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="1"/><rect x="13" y="13" width="7.5" height="7.5" rx="1"/></svg>Windows</button>
+      <button type="button" role="radio" id="os-mac" data-os="mac" aria-checked="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="4.5" y="5" width="15" height="10.5" rx="1.5"/><path d="M2.5 19h19"/></svg>Mac</button>
+      <button type="button" role="radio" id="os-iphone" data-os="iphone" aria-checked="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="3"/><path d="M10.5 5.3h3"/></svg>iPhone</button>
+      <button type="button" role="radio" id="os-android" data-os="android" aria-checked="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2"/><circle cx="12" cy="5.4" r=".6" fill="currentColor"/><path d="M10 18.8h4"/></svg>Android</button>
+    </div>
+    <p class="pick-sub" data-for="iphone android">Op je gsm gebruik je de app <b>dE3p</b>: dezelfde schermen als het programma, op je beginscherm, zonder App Store.</p>
+
+    <!--web-->
+    <div class="dl" data-for="win">
+      <a class="dl-knop" id="dl-win" href="{{download:windows}}">Download voor Windows <small>ZIP · {{size:windows}}</small></a>
+      <p class="dl-meer">Versie {{version}} · Windows 10 of 11</p>
+    </div>
+    <div class="dl" data-for="mac">
+      <a class="dl-knop" id="dl-mac" href="{{download:mac}}">Download voor Mac <small>ZIP · {{size:mac}}</small></a>
+      <p class="dl-meer">Versie {{version:mac}} · Oudere Mac met Intel-chip? <a href="{{download:mac-intel}}">Download die versie</a></p>
+    </div>
+    <!--/web-->
+    <div class="dl" data-for="iphone android">
+      <a class="dl-knop" id="dl-iphone" href="https://www.de3p.be/">Open de dE3p-app →</a>
+      <div class="qr">{{qr:run}}<p><b>Zit je aan je computer?</b> Richt de camera van je gsm op deze code.</p></div>
+    </div>
+
+    <ul class="needs">
+      <li data-for="win mac"><b>Een computer</b><span>Windows 10/11 of een Mac</span></li>
+      <li data-for="iphone"><b>Je iPhone</b><span>met Safari</span></li>
+      <li data-for="android"><b>Je Android-gsm</b><span>met Chrome</span></li>
+      <li><b>Een Strava-account</b><span>gratis is genoeg</span></li>
+      <li><b>10 minuten</b><span>één keer</span></li>
+    </ul>
+  </div>
+  <figure class="hero-card">
+    <img src="{{img:card}}" alt="Voorbeeld van een kaart: Tempoduurloop van 7,16 km met tempo per kilometer en hartslag" width="540" height="960">
+    <figcaption class="label">Zo ziet een kaart eruit</figcaption>
+  </figure>
+</section>
+
+<!--web-->
+<section class="wrap film" id="video" data-for="win mac">
+  <figure>
+    <video src="dE3p.mp4" poster="dE3p-poster.jpg" controls playsinline preload="none"></video>
+    <figcaption class="label">dE3p in 1 minuut</figcaption>
+  </figure>
+</section>
+<!--/web-->
+
+<div class="wrap layout">
+  <nav class="toc" aria-label="Inhoud">
+    <p class="label" data-for="win mac">In 5 stappen</p>
+    <ol data-for="win mac">
+      <li><a href="#downloaden">Downloaden</a></li>
+      <li><a href="#openen">Openen</a></li>
+      <li><a href="#sleutel">Strava-sleutel</a></li>
+      <li><a href="#koppelen">Koppelen</a></li>
+      <li><a href="#klaar">Klaar</a></li>
+    </ol>
+    <p class="label" data-for="iphone android">In 3 stappen</p>
+    <ol data-for="iphone android">
+      <li><a href="#gsm-openen">Openen</a></li>
+      <li><a href="#gsm-beginscherm">Op je beginscherm</a></li>
+      <li><a href="#gsm-koppelen">Koppelen</a></li>
+    </ol>
+    <ul>
+      <li><a href="#elke-dag">Elke dag</a></li>
+      <li><a href="#rondleiding">Wat zie je waar?</a></li>
+      <li data-for="win mac"><a href="#horloge">Horloge koppelen</a></li>
+      <li data-for="win mac"><a href="#instellingen">Instellingen</a></li>
+      <li><a href="#problemen">Lukt het niet?</a></li>
+      <li><a href="#privacy">Privacy</a></li>
+    </ul>
+  </nav>
+
+  <main class="doc">
+    <div class="howto"><p><span data-for="win mac">Klik</span><span data-for="iphone android">Tik</span> waar de <span class="red">rode cirkel</span> staat. Nummers? Doe het in die volgorde.</p></div>
+
+    <!-- ================= COMPUTER: WINDOWS EN MAC ================= -->
+    <section id="downloaden" class="first" data-for="win mac">
+      <div class="step-h"><span class="num">1</span><div><p class="label">Stap 1 van 5</p><h2>Downloaden</h2></div></div>
+      <!--offline--><p class="say1">Heb je dit bestand al? Dan heb je het programma al. Ga naar stap 2.</p><!--/offline-->
+      <ol class="steps">
+        <li data-for="win"><p class="do">Ga naar de3p.be/download, kies "Windows" en klik op "Download voor Windows".</p>
+          <img src="{{img:s-download-win}}" alt="De website: Windows gekozen en de knop Download voor Windows omcirkeld" width="1200" height="700" loading="lazy"></li>
+        <li data-for="mac"><p class="do">Ga naar de3p.be/download, kies "Mac" en klik op "Download voor Mac".</p>
+          <img src="{{img:s-download-mac}}" alt="De website in Safari: Mac gekozen en de knop Download voor Mac omcirkeld" width="1200" height="700" loading="lazy"></li>
+      </ol>
+    </section>
+
+    <section id="openen" data-for="win mac">
+      <div class="step-h"><span class="num">2</span><div><p class="label">Stap 2 van 5</p><h2>Openen</h2></div></div>
+      <ol class="steps" data-for="win">
+        <li><p class="do">Klik met de rechtermuisknop op de zip en kies "Alles uitpakken…".</p>
+          <img src="{{img:s-unzip}}" alt="Verkenner: rechtermuisklik op de zip, menu met Alles uitpakken omcirkeld" width="1200" height="700" loading="lazy">
+          <p class="why">Daarna: <i>Uitpakken</i>.</p></li>
+        <li><p class="do">Dubbelklik op "dE3p.exe".</p>
+          <img src="{{img:s-exe}}" alt="Verkenner met dE3p.exe omcirkeld" width="1200" height="700" loading="lazy"></li>
+        <li><p class="do">Blauw venster? Klik op "Meer informatie" en dan op "Toch uitvoeren".</p>
+          <img src="{{img:s-smartscreen}}" alt="Het blauwe venster van Windows met Meer informatie en Toch uitvoeren omcirkeld" width="1200" height="700" loading="lazy">
+          <p class="why">Geen blauw venster? Sla over.</p></li>
+      </ol>
+      <ol class="steps" data-for="mac">
+        <li><p class="do">Dubbelklik op de zip en sleep de app naar "Apps".</p>
+          <img src="{{img:s-mac-drag}}" alt="Finder: de app wordt naar Apps gesleept" width="1200" height="700" loading="lazy"></li>
+        <li><p class="do">De eerste keer: rechtermuisklik op de app, "Open", en nog eens "Open".</p>
+          <img src="{{img:s-mac-open}}" alt="Rechtermuisklik op de app met Open omcirkeld, en de knop Open in het venster van de Mac" width="1200" height="700" loading="lazy"></li>
+      </ol>
+    </section>
+
+    <section id="sleutel" data-for="win mac">
+      <div class="step-h"><span class="num">3</span><div><p class="label">Stap 3 van 5 · één keer</p><h2>Je Strava-sleutel maken</h2></div></div>
+      <ol class="steps">
+        <li><p class="do">Klik in het programma op "Open strava.com/settings/api" en log in op Strava.</p>
+          <div class="appwin" data-for="win"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-stap1-win}}" alt="Het programma bij de eerste start met de knop Open strava.com/settings/api omcirkeld" width="1320" height="900" loading="lazy"></div>
+          <div class="appwin" data-for="mac"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-stap1-mac}}" alt="Het programma bij de eerste start met de knop Open strava.com/settings/api omcirkeld" width="1320" height="900" loading="lazy"></div></li>
+        <li><p class="do">Vul het formulier op Strava zo in, vink aan en klik op "Create".</p>
+          <img data-for="win" src="{{img:s-strava-form-win}}" alt="Het formulier op Strava met localhost, het vinkje en de knop Create omcirkeld" width="1200" height="700" loading="lazy">
+          <img data-for="mac" src="{{img:s-strava-form-mac}}" alt="Het formulier op Strava in Safari met localhost, het vinkje en de knop Create omcirkeld" width="1200" height="700" loading="lazy">
+          <div class="kv" role="table" aria-label="Waarden voor het Strava-formulier">
+            <div class="kv-row" role="row"><span class="k" role="cell">Application Name</span><span class="v" role="cell">dE3p</span><button class="copy" type="button" data-copy="dE3p">Kopieer</button></div>
+            <div class="kv-row" role="row"><span class="k" role="cell">Category</span><span class="v" role="cell">Training (maakt niet uit)</span><span aria-hidden="true"></span></div>
+            <div class="kv-row" role="row"><span class="k" role="cell">Website</span><span class="v" role="cell">http://localhost</span><button class="copy" type="button" data-copy="http://localhost">Kopieer</button></div>
+            <div class="kv-row key" role="row"><span class="k" role="cell">Authorization Callback Domain</span><span class="v" role="cell">localhost</span><button class="copy" type="button" data-copy="localhost">Kopieer</button></div>
+          </div>
+          <p class="why">Vraagt Strava een icoon? Eender welke afbeelding is goed.</p></li>
+      </ol>
+      <div class="note"><p><b>Belangrijk:</b> bij <i>Authorization Callback Domain</i> staat exact <code>localhost</code>. Wil je ook de gsm-app? Zet er dan <code>www.de3p.be</code>: het programma blijft dan ook werken.</p></div>
+    </section>
+
+    <section id="koppelen" data-for="win mac">
+      <div class="step-h"><span class="num">4</span><div><p class="label">Stap 4 van 5</p><h2>Koppelen</h2></div></div>
+      <ol class="steps">
+        <li><p class="do">Kopieer op Strava je Client ID en (klik eerst op "show") je Client Secret.</p>
+          <img data-for="win" src="{{img:s-strava-keys-win}}" alt="Strava toont de Client ID en de Client Secret, allebei omcirkeld" width="1200" height="700" loading="lazy">
+          <img data-for="mac" src="{{img:s-strava-keys-mac}}" alt="Strava in Safari toont de Client ID en de Client Secret, allebei omcirkeld" width="1200" height="700" loading="lazy"></li>
+        <li><p class="do">Plak ze in het programma en klik op "Koppel met Strava".</p>
+          <div class="appwin" data-for="win"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-stap2-win}}" alt="Het programma met de vakken Client ID en Client Secret en de knop Koppel met Strava omcirkeld" width="1320" height="1240" loading="lazy"></div>
+          <div class="appwin" data-for="mac"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-stap2-mac}}" alt="Het programma met de vakken Client ID en Client Secret en de knop Koppel met Strava omcirkeld" width="1320" height="1240" loading="lazy"></div></li>
+        <li><p class="do">Je browser opent Strava. Klik op de oranje knop "Authorize".</p>
+          <img data-for="win" src="{{img:s-strava-auth-win}}" alt="Strava vraagt toestemming, de oranje knop Authorize omcirkeld" width="1200" height="700" loading="lazy">
+          <img data-for="mac" src="{{img:s-strava-auth-mac}}" alt="Strava in Safari vraagt toestemming, de oranje knop Authorize omcirkeld" width="1200" height="700" loading="lazy">
+          <p class="why">"Gekoppeld met Strava"? Ga terug naar het programma.</p></li>
+      </ol>
+    </section>
+
+    <section id="klaar" data-for="win mac">
+      <div class="step-h"><span class="num">5</span><div><p class="label">Stap 5 van 5</p><h2>Klaar maken</h2></div></div>
+      <ol class="steps">
+        <li><p class="do">Loop je een wedstrijd? Vul hem in en klik op "Maak mijn schema".</p>
+          <div class="appwin"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-schema}}" alt="Het schemaformulier met de knoppen Maak mijn schema en Overslaan omcirkeld" width="1320" height="900" loading="lazy"></div>
+          <p class="why">Geen wedstrijd? <i>Overslaan</i>.</p></li>
+        <li><p class="do"><span data-for="win">Laat de twee schakelaars aan en klik op "Klaar, haal mijn runs op".</span><span data-for="mac">Laat de schakelaar aan en klik op "Klaar, haal mijn runs op".</span></p>
+          <div class="appwin" data-for="win"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-klaar-win}}" alt="De laatste stap met de knop Klaar, haal mijn runs op omcirkeld" width="1320" height="900" loading="lazy"></div>
+          <div class="appwin" data-for="mac"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-klaar-mac}}" alt="De laatste stap met de knop Klaar, haal mijn runs op omcirkeld" width="1320" height="900" loading="lazy"></div></li>
+      </ol>
+      <div class="done-box"><p class="big">🎉 Klaar!</p><p>Vanaf nu gaat alles vanzelf.</p></div>
+    </section>
+
+    <!-- ================= GSM: IPHONE EN ANDROID (de dE3p-app) ================= -->
+    <section id="gsm-openen" class="first" data-for="iphone android">
+      <div class="step-h"><span class="num">1</span><div><p class="label">Stap 1 van 3</p><h2>De app openen</h2></div></div>
+      <ol class="steps">
+        <li data-for="iphone"><p class="do">Open Safari en ga naar www.de3p.be.</p>
+          <div class="phones one"><img src="{{img:ip-open}}" alt="Safari op een iPhone met www.de3p.be" width="480" height="940" loading="lazy"></div>
+          <p class="why">Gebruik Safari, niet de browser in Instagram of Facebook.</p></li>
+        <li data-for="android"><p class="do">Open Chrome en ga naar www.de3p.be.</p>
+          <div class="phones one"><img src="{{img:an-open}}" alt="Chrome op een Android-gsm met www.de3p.be" width="480" height="940" loading="lazy"></div></li>
+      </ol>
+    </section>
+
+    <section id="gsm-beginscherm" data-for="iphone android">
+      <div class="step-h"><span class="num">2</span><div><p class="label">Stap 2 van 3</p><h2>Op je beginscherm</h2></div></div>
+      <ol class="steps" data-for="iphone">
+        <li><p class="do">Tik op ⋯ en dan op Deel. Kies "Zet op beginscherm".</p>
+          <div class="phones"><img src="{{img:ip-menu}}" alt="Safari: de knop met drie puntjes en Deel omcirkeld" width="480" height="940" loading="lazy"><img src="{{img:ip-share}}" alt="Het deelmenu met Zet op beginscherm omcirkeld" width="480" height="940" loading="lazy"></div>
+          <p class="why">Zie je onderaan een vierkantje met een pijl? Tik daar meteen op.</p></li>
+        <li><p class="do">Tik op "Voeg toe". Open de app daarna met het dE3p-icoon.</p>
+          <div class="phones"><img src="{{img:ip-add}}" alt="Het scherm Zet op beginscherm met Voeg toe omcirkeld" width="480" height="940" loading="lazy"><img src="{{img:ip-home}}" alt="Het beginscherm met het dE3p-icoon omcirkeld" width="480" height="940" loading="lazy"></div></li>
+      </ol>
+      <ol class="steps" data-for="android">
+        <li><p class="do">Tik rechtsboven op ⋮ en kies "App installeren".</p>
+          <div class="phones"><img src="{{img:an-menu}}" alt="Chrome: het menu met App installeren omcirkeld" width="480" height="940" loading="lazy"><img src="{{img:an-install}}" alt="Het venster App installeren met de knop Installeren omcirkeld" width="480" height="940" loading="lazy"></div>
+          <p class="why">Staat er "Toevoegen aan startscherm"? Tik daarop, dat is hetzelfde.</p></li>
+        <li><p class="do">Open de app met het dE3p-icoon.</p>
+          <div class="phones one"><img src="{{img:an-home}}" alt="Het startscherm met het dE3p-icoon omcirkeld" width="480" height="940" loading="lazy"></div></li>
+      </ol>
+    </section>
+
+    <section id="gsm-koppelen" data-for="iphone android">
+      <div class="step-h"><span class="num">3</span><div><p class="label">Stap 3 van 3 · één keer</p><h2>Koppelen</h2></div></div>
+      <p class="say1">Heb je dE3p op je computer? Koppel dan met je computer: je gsm toont alles, ook je gezondheid. Geen computer? Kijk bij B.</p>
+
+      <h3 class="os-h">A · Met je computer</h3>
+      <ol class="steps">
+        <li><p class="do">Klik in het programma rechtsboven op het tandwiel → "Gsm" → "Toon koppelcode".</p>
+          <div class="appwin"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-gsm}}" alt="Instellingen met Gsm en de koppelcode met QR-code omcirkeld" width="1320" height="900" loading="lazy"></div>
+          <p class="why">De code werkt 7 dagen en zo vaak als je wilt, ook op een tweede gsm. Zolang je computer synct, blijft ze werken.</p></li>
+        <li><p class="do">Tik in de app op "Begin" en dan op "Met mijn computer". Typ de code en tik op "Koppel".</p>
+          <div class="phones one" data-for="iphone"><img src="{{img:ip-pair}}" alt="De app met de koppelcode en de knop Koppel omcirkeld" width="480" height="940" loading="lazy"></div>
+          <div class="phones one" data-for="android"><img src="{{img:an-pair}}" alt="De app met de koppelcode en de knop Koppel omcirkeld" width="480" height="940" loading="lazy"></div>
+          <p class="why">Je computer versleutelt alles. Enkel jouw gsm krijgt de sleutel: dE3p kan je gegevens niet lezen.</p></li>
+      </ol>
+
+      <h3 class="os-h">B · Enkel op je gsm</h3>
+      <ol class="steps">
+        <li><p class="do">Tik in de app op "Begin" en dan op "Enkel op deze gsm". Maak je Strava-sleutel op strava.com/settings/api en tik op "Create".</p>
+          <div class="phones one" data-for="iphone"><img src="{{img:ip-strava}}" alt="Het formulier op Strava met www.de3p.be en de knop Create omcirkeld" width="480" height="940" loading="lazy"></div>
+          <div class="phones one" data-for="android"><img src="{{img:an-strava}}" alt="Het formulier op Strava met www.de3p.be en de knop Create omcirkeld" width="480" height="940" loading="lazy"></div>
+          <div class="kv" role="table" aria-label="Waarden voor het Strava-formulier">
+            <div class="kv-row" role="row"><span class="k" role="cell">Application Name</span><span class="v" role="cell">dE3p</span><button class="copy" type="button" data-copy="dE3p">Kopieer</button></div>
+            <div class="kv-row" role="row"><span class="k" role="cell">Category</span><span class="v" role="cell">Training (maakt niet uit)</span><span aria-hidden="true"></span></div>
+            <div class="kv-row" role="row"><span class="k" role="cell">Website</span><span class="v" role="cell">https://www.de3p.be</span><button class="copy" type="button" data-copy="https://www.de3p.be">Kopieer</button></div>
+            <div class="kv-row key" role="row"><span class="k" role="cell">Authorization Callback Domain</span><span class="v" role="cell">www.de3p.be</span><button class="copy" type="button" data-copy="www.de3p.be">Kopieer</button></div>
+          </div></li>
+        <li><p class="do">Kopieer je Client ID en (tik eerst op "show") je Client Secret.</p>
+          <div class="phones one" data-for="iphone"><img src="{{img:ip-keys}}" alt="Strava toont de Client ID en de Client Secret, allebei omcirkeld" width="480" height="940" loading="lazy"></div>
+          <div class="phones one" data-for="android"><img src="{{img:an-keys}}" alt="Strava toont de Client ID en de Client Secret, allebei omcirkeld" width="480" height="940" loading="lazy"></div></li>
+        <li><p class="do">Plak ze in de app en tik op "Koppel met Strava".</p>
+          <div class="phones one" data-for="iphone"><img src="{{img:ip-connect}}" alt="De app met de vakken Client ID en Client Secret en de knop Koppel met Strava omcirkeld" width="480" height="940" loading="lazy"></div>
+          <div class="phones one" data-for="android"><img src="{{img:an-connect}}" alt="De app met de vakken Client ID en Client Secret en de knop Koppel met Strava omcirkeld" width="480" height="940" loading="lazy"></div></li>
+        <li data-for="iphone"><p class="do">Tik op "Authorize". Tik daarna linksboven op "Gereed".</p>
+          <div class="phones"><img src="{{img:ip-auth}}" alt="Strava vraagt toestemming, de oranje knop Authorize omcirkeld" width="480" height="940" loading="lazy"><img src="{{img:ip-back}}" alt="Gelukt: ga terug naar de app, de knop Gereed omcirkeld" width="480" height="940" loading="lazy"></div></li>
+        <li data-for="android"><p class="do">Tik op "Authorize". Je komt vanzelf terug in de app.</p>
+          <div class="phones one"><img src="{{img:an-auth}}" alt="Strava vraagt toestemming, de oranje knop Authorize omcirkeld" width="480" height="940" loading="lazy"></div></li>
+      </ol>
+      <div class="note"><p><b>Heb je al een Strava-sleutel</b> van het programma op je computer? Gebruik die en verander enkel het <i>Authorization Callback Domain</i> in <code>www.de3p.be</code>. Koppel je toch met je computer (A)? Dan heb je B niet nodig.</p></div>
+      <div class="done-box"><p class="big">🎉 Klaar!</p><p>Open dE3p via het icoon: je trainingen staan erin.</p></div>
+    </section>
+
+    <!-- ================= VOOR IEDEREEN ================= -->
+    <section id="elke-dag">
+      <p class="label">Na de installatie</p>
+      <h2>Elke dag</h2>
+      <ol class="daily" data-for="win mac">
+        <li><b>Ga trainen</b><span>Zoals altijd, met Strava.</span></li>
+        <li><b>Het programma haalt hem op</b><span>Vanzelf, elk half uur.</span></li>
+        <li><b>Je kaart staat klaar</b><span>In <i>Afbeeldingen</i> → <i>dE3p</i>.</span></li>
+      </ol>
+      <ol class="daily" data-for="iphone android">
+        <li><b>Ga trainen</b><span>Zoals altijd, met Strava.</span></li>
+        <li><b>Open dE3p</b><span>Je run komt er vanzelf in: van je computer of rechtstreeks van Strava.</span></li>
+        <li><b>Tik op je run</b><span>Tik op <i>Delen</i>: naar Instagram, TikTok of je foto's.</span></li>
+      </ol>
+      <p class="aside" data-for="win mac">Ook op je gsm? Tandwiel → <i>Gsm</i>. Kies bovenaan iPhone of Android voor de stappen.</p>
+      <p class="aside" data-for="iphone android">Gekoppeld met je computer? Je gsm krijgt een nieuwe kopie telkens het programma synct.</p>
+    </section>
+
+    <section id="rondleiding">
+      <p class="label">Rondleiding</p>
+      <h2>Wat zie je waar?</h2>
+      <p class="say1">Alles staat op één pagina. Scroll naar beneden voor je gezondheid en je trainingen.</p>
+      <div data-for="win mac">
+        <h3>Bovenaan</h3>
+        <div class="appwin pic"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-overzicht}}" alt="De pagina bovenaan met drie genummerde delen" width="1320" height="900" loading="lazy"></div>
+        <ol class="legend">
+          <li>Hoe het met je gaat, in één grafiek: per cijfer (slaap, HRV, rustpols, Body Battery, stress, VO2max) zie je of het beter gaat (groen, naar rechts), stabiel blijft (bolletje) of slechter gaat (rood, naar links). Per cijfer zie je hoe het nu is, je gemiddelde van de week en dat van de maand; bij Body Battery ook hoeveel je nu nog hebt. Het <i>i</i>-knopje legt uit hoe je het leest.</li>
+          <li><i>Bijwerken</i>: haal je nieuwste training nu op.</li>
+          <li>Het tandwiel: je instellingen.</li>
+        </ol>
+
+        <h3>Gezondheid</h3>
+        <div class="appwin pic"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-gezondheid}}" alt="Gezondheid met drie genummerde delen" width="1320" height="900" loading="lazy"></div>
+        <ol class="legend">
+          <li><i>Dag</i>: één dag. <i>Week</i> en <i>Maand</i>: elke dag van die week of maand, vergeleken met de vorige. <i>Alles</i>: per maand, zo ver terug als er gegevens zijn.</li>
+          <li>Blader terug: met de pijltjes, de strook met dagen, of klik op de datum.</li>
+          <li>Je cijfers van die dag, vergeleken met wat normaal is voor jou.</li>
+        </ol>
+
+        <h3>Trainingen</h3>
+        <div class="appwin pic"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-trainingen}}" alt="Trainingen met drie genummerde delen" width="1320" height="1350" loading="lazy"></div>
+        <ol class="legend">
+          <li>Deze week, met wat je liep en wat gepland staat. Tik op een week om ze open of dicht te klappen.</li>
+          <li>De training van vandaag, met uitleg.</li>
+          <li>Al je weken op een rij: tik op een week, of ga met ‹ › naar de vorige of volgende. Eronder staat die ene week. Je wedstrijd en het einde van een doel staan in het goud, met hoeveel dagen nog.</li>
+        </ol>
+      </div>
+      <div data-for="iphone">
+        <img class="tour" src="{{img:ip-tour}}" alt="Drie schermen van de dE3p-app op een iPhone: bovenaan de pagina, gezondheid en een run met zijn kaart" width="1200" height="900" loading="lazy">
+      </div>
+      <div data-for="android">
+        <img class="tour" src="{{img:an-tour}}" alt="Drie schermen van de dE3p-app op een Android-gsm: bovenaan de pagina, gezondheid en een run met zijn kaart" width="1200" height="900" loading="lazy">
+      </div>
+      <ol class="legend" data-for="iphone android">
+        <li>Bovenaan: dagen tot je wedstrijd, wat je vandaag loopt en je week.</li>
+        <li>Scroll naar beneden: je gezondheid per dag, en daaronder je schema.</li>
+        <li>Je run met zijn kaart. Tik op <i>Delen</i>.</li>
+      </ol>
+    </section>
+
+    <section id="horloge" data-for="win mac">
+      <p class="label">Mag, hoeft niet</p>
+      <h2>Horloge koppelen</h2>
+      <p class="say1">Garmin, Whoop, Oura, Polar, Withings of intervals.icu? Dan zie je ook je slaap, herstel en gewicht.</p>
+      <ol class="steps">
+        <li><p class="do">Tandwiel → Garmin → mail en wachtwoord → "Koppel Garmin".</p>
+          <div class="appwin"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-garmin}}" alt="Instellingen met Garmin, de vakken voor mail en wachtwoord en de knop Koppel Garmin omcirkeld" width="1320" height="900" loading="lazy"></div>
+          <p class="why">Whoop, Oura, Polar, Withings of intervals.icu? Klik op <i>Meer koppelingen</i> en volg de stappen. Een ander horloge (Samsung, Huawei, Apple, Coros, Suunto, Amazfit …)? Koppel de app van je horloge aan Strava: dan komen je trainingen in dE3p. Slaap en herstel van die merken kunnen (nog) niet.</p></li>
+      </ol>
+    </section>
+
+    <section id="instellingen" data-for="win mac">
+      <p class="label">Alles aanpassen</p>
+      <h2>Instellingen</h2>
+      <p class="say1">Klik rechtsboven op het tandwiel. Nog eens klikken (of <i>← Terug</i>) brengt je terug naar je pagina.</p>
+      <div class="appwin pic" data-for="win"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-instellingen-win}}" alt="Instellingen met de koppelingen omcirkeld" width="1320" height="900" loading="lazy"></div>
+          <div class="appwin pic" data-for="mac"><div class="tb" aria-hidden="true">dE3p</div><img src="{{img:a-instellingen-mac}}" alt="Instellingen met de koppelingen omcirkeld" width="1320" height="900" loading="lazy"></div>
+      <ol class="legend">
+        <li>Je koppelingen. Klik op een rij om ze open te klappen.</li>
+      </ol>
+      <p class="aside">Een wedstrijd, fitter worden, zwemmen? Onder <i>Schema's</i> → <i>Je doelen</i> → <i>Nieuw doel</i>. Je kan meerdere doelen tegelijk hebben, en bij de eerste vraag meer dan één aanduiden: alles staat op één pagina, met je week van alle doelen samen. dE3p kijkt eerst naar je trainingen van de laatste 8 weken (hoe vaak, welke dagen, hoe lang, je tempo) en vult de vragen al in. Bij elke vraag kan je ook zelf typen, bv. "tot de zomer" of "mijn knie is gevoelig". Een nieuw doel houdt rekening met je loopschema en je andere doelen: geen tweede loop op een dag van je loopschema, lichter in je taper en niets extra rond je wedstrijd. In de samenvatting zie je je week, met wat er al staat ernaast. Draait de AI (Ollama) op je computer (<i>Instellingen</i> → <i>Geavanceerd</i> → <i>AI op deze computer</i>), dan schrijf je alles in je eigen woorden, bv. "tegen de zomer gespierder, 3 dagen in de fitness, knie soms gevoelig" of "marathon van Rotterdam in april in 3:15", en vult dE3p de vragen of je loopschema meteen in. Doe je een training, dan krijgt ze op Strava de naam van het schema.</p>
+      <p class="aside">Nieuwe versie? Er komt een groene melding naast <i>Bijwerken</i>: klik erop en het programma doet de rest.</p>
+      <p class="aside" data-for="win">Op je taakbalk: Startmenu → rechtsklik op <i>dE3p</i> → <i>Aan taakbalk vastmaken</i>.</p>
+      <p class="aside" data-for="mac">In je Dock: open de app, rechtsklik op het icoon in het Dock → <i>Opties</i> → <i>Houd in Dock</i>.</p>
+    </section>
+
+    <section id="problemen">
+      <p class="label">Hulp</p>
+      <h2>Lukt het niet?</h2>
+      <div class="faq">
+        <details data-for="win mac"><summary>Strava geeft een fout bij het koppelen</summary>
+          <p>Kijk op <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">strava.com/settings/api</a> of bij <i>Authorization Callback Domain</i> <code>localhost</code> of <code>www.de3p.be</code> staat. Klik op <i>Update</i> en probeer opnieuw.</p></details>
+        <details data-for="iphone android"><summary>Strava geeft een fout bij het koppelen</summary>
+          <p>Kijk op <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">strava.com/settings/api</a> of bij <i>Authorization Callback Domain</i> exact <code>www.de3p.be</code> staat. Tik op <i>Update</i> en probeer opnieuw.</p></details>
+        <details><summary>"Client ID of Client Secret klopt niet"</summary>
+          <p>Kopieer ze opnieuw. De Client ID is enkel een getal. Bij de Client Secret tik of klik je eerst op <i>show</i>.</p></details>
+        <details data-for="iphone android"><summary>"Die code werkt niet (meer)"</summary>
+          <p>Kijk in het programma op je computer bij het tandwiel → <i>Gsm</i> → <i>Toon koppelcode</i> welke code er nu geldt. Een code werkt 7 dagen, zo vaak als je wilt. Kleine of hoofdletters, dat maakt niet uit. Op een iPhone: typ de code in de app op je beginscherm, niet in Safari.</p></details>
+        <details data-for="iphone android"><summary>Mijn gsm toont oude gegevens</summary>
+          <p>Je gsm krijgt een nieuwe kopie telkens het programma op je computer synct. Open het programma of klik op <i>Bijwerken</i>, en tik daarna op je gsm op <i>Bijwerken</i>. Wil je nieuwe runs ook als je computer uit staat? Koppel dan ook Strava op je gsm (Instellingen → Strava).</p></details>
+        <details data-for="iphone"><summary>Ik zie "Zet op beginscherm" niet</summary>
+          <p>Gebruik Safari. Scroll in het deelmenu naar onder. Staat het er nog niet? Tik onderaan op <i>Wijzig taken</i> en zet het erbij.</p></details>
+        <details data-for="iphone"><summary>Na "Authorize" kom ik niet terug in de app</summary>
+          <p>Tik linksboven op <i>Gereed</i>. Lukt het niet? Open de app opnieuw via het dE3p-icoon en tik nog eens op <i>Verbind met Strava</i>.</p></details>
+        <details data-for="android"><summary>Ik zie "App installeren" niet</summary>
+          <p>Gebruik Chrome. Kies dan <i>Toevoegen aan startscherm</i>, dat is hetzelfde.</p></details>
+        <details data-for="win mac"><summary>"Poort 8721 is bezet"</summary>
+          <p>Er staat nog een tweede venster van het programma open. Sluit ze allemaal, open het opnieuw en probeer nog eens.</p></details>
+        <details data-for="win mac"><summary>Mijn privé-runs ontbreken</summary>
+          <p>Ga naar het tandwiel → <i>Strava</i> → <i>Opnieuw koppelen</i>, en laat op Strava alle vinkjes aan.</p></details>
+        <details data-for="iphone android"><summary>Mijn privé-runs ontbreken</summary>
+          <p>Ga in de dE3p-app naar het tandwiel (<i>Instellingen</i>), verbreek de koppeling en verbind opnieuw. Laat op Strava alle vinkjes aan.</p></details>
+        <details data-for="win"><summary>Het venster blijft wit</summary>
+          <p>Installeer de gratis <i>WebView2</i> van Microsoft via <a href="https://developer.microsoft.com/microsoft-edge/webview2/" target="_blank" rel="noopener">deze pagina</a> (knop <i>Evergreen Bootstrapper</i>) en open het programma opnieuw.</p></details>
+        <details data-for="win"><summary>Mijn antivirus houdt het tegen</summary>
+          <p>Download het programma alleen via <a href="https://www.de3p.be/download/">de3p.be/download</a>. Dan is het in orde: het heeft gewoon geen betaalde handtekening.</p></details>
+        <details data-for="mac"><summary>Mijn Mac wil de app niet openen</summary>
+          <p>Ga naar <i>Systeeminstellingen</i> → <i>Privacy en beveiliging</i>, scrol naar onder en klik op <i>Open toch</i>. Zegt de Mac dat de app "beschadigd" is? Sleep hem opnieuw uit de zip naar <i>Apps</i>.</p></details>
+        <details data-for="mac"><summary>Welke Mac-versie heb ik nodig?</summary>
+          <p>Klik op het Apple-menu → <i>Over deze Mac</i>. Staat er <i>M1</i>, <i>M2</i>, <i>M3</i>… of nieuwer? Neem de gewone Mac-versie. Staat er <i>Intel</i>? Neem de Intel-versie.</p></details>
+        <details><summary>Ik gebruik het op twee toestellen en op één werkt het niet meer</summary>
+          <p>Koppel op dat toestel opnieuw met dezelfde Client ID en Client Secret: in het programma via het tandwiel → <i>Strava</i> → <i>Opnieuw koppelen</i>, in de dE3p-app via <i>Instellingen</i>.</p></details>
+      </div>
+    </section>
+
+    <section id="privacy">
+      <p class="label">Jouw gegevens</p>
+      <h2>Privacy</h2>
+      <p data-for="win mac">Alles blijft op je eigen computer. Niemand anders ziet je gegevens, ook dE3p niet.</p>
+      <p data-for="iphone android">Alles blijft op je gsm, in de app. Gekoppeld met je computer? Dan stuurt je computer een versleutelde kopie via de3p.be: enkel jouw gsm heeft de sleutel, dE3p kan niets lezen. Met Strava rechtstreeks geeft de website enkel je verzoeken aan Strava door en bewaart niets.</p>
+      <div class="faq"><details><summary>Verwijderen</summary>
+        <p data-for="win">Tandwiel → <i>Strava</i> → <i>Ontkoppelen</i>. Gooi daarna de map <i>dE3p</i> en de snelkoppelingen weg. Alles weg? Gooi ook <code>%APPDATA%\dE3p</code> weg (bij een oudere installatie <code>%APPDATA%\dE3p Strava Sync</code>).</p>
+        <p data-for="mac">Tandwiel → <i>Strava</i> → <i>Ontkoppelen</i>. Sleep de app naar de prullenmand. Alles weg? Gooi ook <code>~/Library/Application Support/dE3p</code> weg (bij een oudere installatie <code>…/dE3p Strava Sync</code>).</p>
+        <p data-for="iphone">Houd het dE3p-icoon ingedrukt en tik op <i>Verwijder app</i>. Alles is dan weg.</p>
+        <p data-for="android">Houd het dE3p-icoon ingedrukt en tik op <i>Verwijderen</i>. Alles is dan weg.</p></details></div>
+    </section>
+  </main>
+</div>
+
+<footer class="wrap foot">
+  <p class="label">dE3p {{version}}</p>
+  <p class="label">Prentjes met demodata · schermen van Windows, Mac, iPhone, Android en Strava vereenvoudigd nagetekend</p>
+</footer>
+
+<script>
+  // Toestel kiezen: knoppen bovenaan, de keuze wordt onthouden.
+  const picks = [...document.querySelectorAll('.pick [data-os]')];
+  const mark = (os) => picks.forEach((b) => b.setAttribute('aria-checked', String(b.dataset.os === os)));
+  mark(document.documentElement.getAttribute('data-os'));
+  picks.forEach((b) => b.addEventListener('click', () => {
+    document.documentElement.setAttribute('data-os', b.dataset.os);
+    mark(b.dataset.os);
+    try { localStorage.setItem('de3p-toestel', b.dataset.os); } catch (e) { /* geen opslag: enkel deze keer */ }
+  }));
+  // Kopieerknoppen; lukt het klembord niet, dan wordt de waarde geselecteerd.
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-copy]');
+    if (!b) return;
+    const done = (t) => { b.textContent = t; setTimeout(() => { b.textContent = 'Kopieer'; }, 1600); };
+    try {
+      await navigator.clipboard.writeText(b.dataset.copy);
+      done('Gekopieerd');
+    } catch {
+      const r = document.createRange();
+      r.selectNodeContents(b.parentElement.querySelector('.v'));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      done('Geselecteerd');
+    }
+  });
+  // Inhoudsopgave: markeer het hoofdstuk dat in beeld is.
+  const links = [...document.querySelectorAll('.toc a')];
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (const en of entries) if (en.isIntersecting) {
+        links.forEach((a) => a.classList.toggle('on', a.getAttribute('href') === `#${en.target.id}`));
+      }
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    document.querySelectorAll('.doc > section').forEach((s) => io.observe(s));
+  }
+</script>

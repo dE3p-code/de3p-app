@@ -1,0 +1,39 @@
+# De dE3p-app voor iPhone bouwen zonder Mac: Codemagic (codemagic.io) bouwt hem in de cloud op een Mac
+# en zet hem op TestFlight. Je installeert hem dan met de TestFlight-app op je iPhone.
+# Eén keer klaarzetten: zie mobile/LEESMIJ.md → "Zonder Mac: Codemagic".
+workflows:
+  ios:
+    name: dE3p iPhone-app naar TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    integrations:
+      app_store_connect: dE3p                 # naam van je App Store Connect API-sleutel in Codemagic
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: be.de3p.app
+      node: 20
+      xcode: latest
+    triggering:
+      events: []                              # enkel met de hand starten (Start new build)
+    scripts:
+      - name: App-bestanden bouwen (app/ en web/ → mobile/www) en in het iOS-project zetten
+        script: |
+          cd mobile
+          npm ci
+          npm run build
+          npx cap sync ios
+      - name: Ondertekenen
+        script: xcode-project use-profiles
+      - name: Buildnummer ophogen
+        script: |
+          cd mobile/ios/App
+          agvtool new-version -all $((BUILD_NUMBER + 10))     # Codemagic telt zelf op bij elke build
+      - name: Bouwen
+        script: xcode-project build-ipa --project mobile/ios/App/App.xcodeproj --scheme App
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

@@ -1,0 +1,34 @@
+.env
+.venv/
+state.json
+logs/
+__pycache__/
+dashboard/index.html
+dashboard/cards/
+*.pyc
+dashboard/cache.json
+# persoonlijke gegevens (ontwikkelmap)
+config.json
+cache.json
+plan.json
+*.tmp
+app/_mock/
+# pakket bouwen
+build/
+dist/
+release/
+*.spec
+docs/Handleiding.html
+assets/de3p.icns
+.wrangler/
+blocks.json
+garmin/
+garmin.json
+gsm_gezondheid.json
+docs/video-out/
+sync.lock
+extra.json
+gsm_inbox.json
+prestaties.json
+metingen.json
+weegschaal.json

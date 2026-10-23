@@ -1,0 +1,19 @@
+{
+  "name": "de3p-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "description": "dE3p als echte app (iPhone, later Android): de gsm-app + Apple Gezondheid",
+  "scripts": {
+    "build": "python3 ../web/build_web.py www --native",
+    "sync": "npm run build && npx cap sync"
+  },
+  "dependencies": {
+    "@capacitor/browser": "8.0.5",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3",
+    "@capgo/capacitor-health": "8.11.8"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

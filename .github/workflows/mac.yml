@@ -1,0 +1,55 @@
+# Bouwt de Mac-versie op een Mac van GitHub en test ze (zonder en met venster).
+# Enkel bij een nieuwe versie (tag vX.Y.Z) of met de hand: Mac-minuten tellen bij GitHub 10× zwaarder,
+# dus niet meer bij elke push. Starten: `git tag v2.3.1 && git push origin v2.3.1`, of `gh workflow run mac.yml`.
+name: Mac-versie bouwen
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  bouw:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15-intel, macos-14]   # Intel-build draait ook op Apple-chips (Rosetta)
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bouwen
+        run: PY=python bash build_mac.sh
+      - name: Pakket testen zonder venster (--check)
+        run: |
+          export DE3P_DATA_DIR="$RUNNER_TEMP/testgebruiker"
+          "dist/dE3p.app/Contents/MacOS/dE3p" --check || true
+          cat "$DE3P_DATA_DIR/logs/check.txt"
+          grep -q '"ok": true' "$DE3P_DATA_DIR/logs/check.txt"
+      - name: Venster testen (--selftest)
+        run: |
+          export DE3P_DATA_DIR="$RUNNER_TEMP/testgebruiker2"
+          ( "dist/dE3p.app/Contents/MacOS/dE3p" --selftest & echo $! > pid )
+          for i in $(seq 1 60); do [ -f "$DE3P_DATA_DIR/logs/selftest.txt" ] && break; sleep 2; done
+          kill "$(cat pid)" 2>/dev/null || true
+          cat "$DE3P_DATA_DIR/logs/selftest.txt" || { echo "geen selftest-verslag"; cat "$DE3P_DATA_DIR/logs/app.log" 2>/dev/null; exit 1; }
+      - name: Automatisch syncen testen (launchd)
+        continue-on-error: true
+        run: |
+          export DE3P_DATA_DIR="$RUNNER_TEMP/testgebruiker3"
+          python - <<'PY'
+          import os, subprocess
+          import app
+          a = app.Api(False)
+          print("aan:", a.set_auto_sync(True), "| status:", a.auto_sync())
+          print(open(app.AGENT_PLIST, "rb").read().decode()[:700])
+          r = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/{app.AGENT}"], capture_output=True, text=True)
+          print("launchctl print:", r.returncode, r.stdout[:300], r.stderr[:200])
+          print("uit:", a.set_auto_sync(False), "| status:", a.auto_sync())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-${{ matrix.runner }}
+          path: release/dE3p-Mac.zip
