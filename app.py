@@ -673,7 +673,7 @@ class Api:
     def _shared_open(self) -> bool:
         """Staat de gedeelde dE3p-sleutel open? 10 minuten onthouden (settings() wordt vaak gevraagd)."""
         now = time.time()
-        if now - getattr(self, "_shared_at", 0) > 600:
+        if now - getattr(self, "_shared_at", 0) > (600 if getattr(self, "_shared_id", None) else 60):
             self._shared_id, self._shared_at = (None if userdata.LEGACY else shared_client_id()), now
         return bool(self._shared_id)
 

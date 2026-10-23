@@ -21,10 +21,10 @@ export function authorizeUrl(clientId, state) {
 }
 
 // Inloggen zonder eigen sleutel: de site kent de gedeelde dE3p-sleutel (Client ID; het geheim blijft op de server).
-// Eén keer per dag nagevraagd. null = nog niet ingesteld: dan maak je zoals vroeger een eigen Strava-sleutel.
+// Eén keer per dag nagevraagd (dicht: elke minuut opnieuw). null = nog niet ingesteld: dan maak je zoals vroeger een eigen Strava-sleutel.
 export async function sharedClient(fresh = false) {
   const c = store.load().stravaShared;
-  if (!fresh && c && Date.now() - c.at < 864e5) return c.id;
+  if (!fresh && c && Date.now() - c.at < (c.id ? 864e5 : 6e4)) return c.id;
   try {
     const r = await fetch(`${PROXY}/config`, { cache: 'no-store' });
     const id = r.ok ? (await r.json())?.clientId || null : null;

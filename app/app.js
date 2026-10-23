@@ -1,5 +1,5 @@
 // dE3p — interface. Data en acties komen van app.py via window.pywebview.api.
-import { generatePlan, DISTANCES } from './js/plan.js';
+import { generatePlan, DISTANCES, RUN_LEVELS, EASY_GOAL } from './js/plan.js';
 import { swimPlan, goalPlan, fitToRace, SWIM_GOALS, GOALS, LEVELS, CARDIO } from './js/extra.js';
 import { parseTime, fmtTime } from './js/util.js';
 import { bodyAge } from './js/bodyage.js';
@@ -15,6 +15,10 @@ const $main = document.getElementById('main');
 const api = () => window.pywebview.api;
 // Op de gsm (www.de3p.be) draait dit scherm in de browser, met web/bridge.js in plaats van Python.
 const WEB = () => S.settings.platform === 'web';
+// de website op een computer (niet op een gsm of tablet): dan spreken we van 'deze computer'
+const DESK = () => WEB() && !S.settings.web?.ios && !S.settings.web?.android && !window.matchMedia?.('(pointer: coarse)').matches;
+const HERE = () => (DESK() ? 'deze computer' : 'deze gsm');
+const OS_NAME = () => (/Mac/i.test(navigator.userAgent) ? 'Mac' : /Win/i.test(navigator.userAgent) ? 'Windows' : 'je computer');
 const OS = () => (S.settings.platform === 'darwin' ? 'mac' : 'win');
 
 // ---- helpers --------------------------------------------------------------
@@ -78,6 +82,8 @@ const errMsg = (e) => (e && (e.message || e.toString())) || 'onbekende fout';
 
 // ---- uitleg per trainingstype --------------------------------------------
 const UITLEG = [
+  { k: /lopen en wandelen|min wandelen/i, t: 'Lopen en wandelen', d: 'Zo begin je zonder blessures: korte stukjes lopen met wandelen ertussen. Loop zo traag dat je kan praten; te zwaar? Wandel gewoon wat langer. Elke week wordt het lopen iets langer.' },
+  { k: /min (rustig lopen|aan één stuk)/i, t: 'Aan één stuk lopen', d: 'Rustig blijven lopen, op praattempo. Het tempo maakt niet uit, de tijd wel. Even wandelen mag altijd: daarna gewoon verder.' },
   { k: /versnelling/i, t: 'Versnellingen', d: 'Na je rustige kilometers 4–6 keer ±20 seconden (80–100 m) vlot versnellen tot ongeveer je 5 km-tempo: snel maar ontspannen, níét sprinten (±85–90% van je max). De eerste seconden opbouwen, de laatste uitlopen. Tussendoor 60–90 s wandelen of heel rustig joggen tot je ademhaling rustig is. Doel: soepele pas en scherpe benen, zonder vermoeidheid. Met restlast: vlakke, zachte ondergrond en stoppen bij pijn.' },
   { k: /\bIL\b|\bUL\b|inlopen|uitlopen/i, t: 'IL / UL', d: 'IL = inlopen (opwarmen), UL = uitlopen (afkoelen), allebei in rustig herstel-tempo. Ze horen bij de training: sla ze niet over.' },
   { k: /mp-finish|tempo-finish|laatste \d/i, t: 'Finish op wedstrijdtempo', d: 'De laatste kilometers van je lange duurloop op wedstrijdtempo. Je leert snel lopen op vermoeide benen, net zoals op het einde van de wedstrijd.' },
@@ -453,10 +459,17 @@ function loadCards() {
 }
 
 // ---- de pagina: overzicht, gezondheid en trainingen onder elkaar --------------------------
+// ---- Strava-merkregels (developers.strava.com/guidelines) --------------------------------
+// officiële knop 'Connect with Strava' (48 px hoog) en logo 'Powered by Strava', los van het dE3p-logo
+const STRAVA_CONNECT = '<img src="img/strava/btn_strava_connect_with_orange.svg" alt="Connect with Strava" width="237" height="48">';
+const poweredByStrava = () => `<footer class="pwrd"><img class="pw-dark" src="img/strava/api_logo_pwrdBy_strava_horiz_white.svg" alt="Powered by Strava" width="146" height="15">
+  <img class="pw-light" src="img/strava/api_logo_pwrdBy_strava_horiz_black.svg" alt="Powered by Strava" width="146" height="15"></footer>`;
+
 function vHome() {
   return `${vOverzicht()}
     ${noHealthHere() ? '' : `<section class="sec" id="sec-gezondheid">${vGezondheid()}</section>`}
-    <section class="sec" id="sec-trainingen">${vTrainingen()}</section>`;
+    <section class="sec" id="sec-trainingen">${vTrainingen()}</section>
+    ${poweredByStrava()}`;
 }
 function greeting() {
   const h = new Date().getHours();
@@ -793,7 +806,7 @@ function vRun() {
       ${isRun && r.src !== 'garmin' && blockSource(r, plan) ? `<section class="panel perf" data-perf="${r.id}" data-structure="${esc(blockSource(r, plan))}"><div class="label">Hoe liep het kernblok?</div><div class="muted small" style="margin-top:8px">Berekenen uit je tussentijden…</div></section>` : ''}
       ${isRun ? `<section class="panel"><h2>Wat hield deze training in?</h2><div class="how" style="margin-top:0">${howOpen(full) || '<div class="muted">Geen uitleg nodig.</div>'}</div></section>` : ''}
       <div class="btns" style="margin-top:0">${r.src === 'garmin' ? `<button class="btn" data-garmin="${r.garmin}">Bekijk op Garmin</button>`
-        : `<button class="btn" data-strava="${r.id}">Bekijk op Strava</button>`}${S.settings.health ? `<button class="btn" data-dayhealth="${r.date}">Herstel die dag</button>` : ''}</div>
+        : `<button class="strava-link" data-strava="${r.id}">View on Strava</button>`}${S.settings.health ? `<button class="btn" data-dayhealth="${r.date}">Herstel die dag</button>` : ''}</div>
     </div>
     <div class="col"><section class="panel rcard"><div class="label" style="margin-bottom:12px">Recap-kaart</div>
       ${card ? `<img class="card-img" data-card="${esc(card.path)}" data-zoom alt="">` : `<div class="card-empty">Nog geen kaart voor deze training.${!WEB() || (S.settings.web?.strava && isRun) ? '<br>Maak er een met de knop hieronder.' : ''}</div>`}
@@ -877,12 +890,13 @@ function vSetup() {
         <h1 class="title">${S.step === 0 ? 'Hoe wil je dE3p gebruiken?' : 'Koppel met je computer'}</h1></div></div>
       ${S.step === 0 ? setupChoose() : setupPc()}</div>`;
   }
-  const bar = `<ol class="stepper">${STEPS.map((t, i) => `<li class="${i + 1 === S.step ? 'on' : i + 1 < S.step ? 'done' : ''}"><span>${pad(i + 1)}</span>${t}</li>`).join('')}</ol>`;
+  const shared = (WEB() ? S.settings.web?.sharedStrava : S.settings.sharedStrava) && !S.ownKey;   // inloggen met de dE3p-sleutel
+  const bar = `<ol class="stepper">${STEPS.map((t, i) => (i === 0 && shared ? 'Strava' : t)).map((t, i) => `<li class="${i + 1 === S.step ? 'on' : i + 1 < S.step ? 'done' : ''}"><span>${pad(i + 1)}</span>${t}</li>`).join('')}</ol>`;
   const body = [setupKey, setupConnect, setupPlan, setupDone][S.step - 1]();
   const back = S.reconnect ? '<button class="back" data-action="cancel-reconnect">← Instellingen</button>' : '';
   return `<div class="setup-wrap">${back}
     <div class="head"><div><div class="label">${S.settings.connected && S.settings.athlete && !S.reconnect ? `Welkom, ${esc(S.settings.athlete)}` : 'Welkom bij dE3p'}</div>
-      <h1 class="title">${STEP_TITLES[S.step - 1]}</h1></div><div class="label">Stap ${S.step} van ${STEPS.length}</div></div>
+      <h1 class="title">${S.step === 1 && shared ? 'Koppel met Strava' : STEP_TITLES[S.step - 1]}</h1></div><div class="label">Stap ${S.step} van ${STEPS.length}</div></div>
     ${bar}${body}</div>`;
 }
 
@@ -891,7 +905,9 @@ function vSetup() {
 // per scherm de juiste maat (vooraf verkleind en verscherpt): scherp op 1x, 2x en 3x
 const IN_PHONE = (name, cls) => `<div class="in-phone ${cls}"><div class="scr"><div class="sb"><span>9:41</span><i></i></div><img src="web/${name}-760.jpg"
   srcset="web/${name}-380.jpg 380w, web/${name}-760.jpg 760w, web/${name}.jpg 1170w" sizes="(max-width: 640px) 210px, 350px" alt="" decoding="async"></div></div>`;
-const IN_LINKS = [['Strava', '#FC4C02'], ['Garmin', '#007CC3'], ['Apple Watch']];
+const IN_LINKS = [['Strava', '#FC4C02'], ['Garmin', '#007CC3'], ['Whoop', '#8A8A8A'], ['Oura', '#B8A27A'], ['Polar', '#D10027'],
+  ['Withings', '#0B6E6E'], ['Weegschaal', '#3A4150'], ['Apple Watch']];
+const IN_SELF = ['Gewicht', 'Lengte', 'Bloedsuiker', 'Bloeddruk', 'Taille'];   // zelf invullen, ook op de gsm
 function vIntro() {
   const why = [
     ['01', 'In één oogopslag', 'Je week, je vorm en je records. In de iPhone-app ook je slaap en hartslag van je Garmin of Apple Watch.'],
@@ -911,10 +927,12 @@ function vIntro() {
         <p class="label">Gratis · op je gsm</p>
         <h1 class="in-h1">Weet waar je staat.<br>Train naar je doel.</h1>
         <p class="in-lead">dE3p brengt je trainingen van Strava, je herstel van je horloge en je schema samen. In één oogopslag zie je hoe je ervoor staat, wat je vandaag doet en of je echt vooruitgaat.</p>
-        <div class="btns"><button class="btn primary big" data-step="1">Begin</button><button class="btn big" data-action="web-demo">Bekijk een voorbeeld</button></div>
+        <div class="btns"><button class="btn primary big" data-step="1">Begin</button>${DESK() ? `<a class="btn big" href="/download/">Download voor ${OS_NAME() === 'je computer' ? 'Windows of Mac' : OS_NAME()}</a>` : ''}<button class="btn big" data-action="web-demo">Bekijk een voorbeeld</button></div>
         <div class="in-works"><span class="label">Koppelt met</span>
           <div class="in-links">${IN_LINKS.map(([n, c]) => `<span class="in-lk"><i${c ? ` style="background:${c}"` : ''}></i>${n}</span>`).join('')}</div>
-          <p class="muted small">Elk horloge dat naar Strava stuurt werkt. Slaap en hartslag van Garmin en Apple Watch: in de iPhone-app (via Apple Gezondheid).</p></div>
+          <span class="label" style="margin-top:6px">Vul zelf in</span>
+          <div class="in-links">${IN_SELF.map((n) => `<span class="in-lk"><i></i>${n}</span>`).join('')}</div>
+          <p class="muted small">Elk horloge dat naar Strava stuurt werkt. Slaap, HRV en herstel van Garmin, Whoop, Oura en Polar, en je gewicht van Withings of je weegschaal: met dE3p op je computer (<a href="/download/">Windows of Mac</a>). Apple Watch: binnenkort in de iPhone-app.</p></div>
       </div>
       <div class="in-visual" aria-hidden="true">
         ${IN_PHONE('intro-home', 'p1')}${IN_PHONE('intro-weeks', 'p2')}
@@ -928,7 +946,7 @@ function vIntro() {
       <h2 class="sec-t">Zo werkt het</h2>
       <ol class="in-steps">${how.map(([t, d], i) => `<li><span class="in-n">${i + 1}</span><div><b>${t}</b><p>${d}</p></div></li>`).join('')}</ol>
       <div class="btns"><button class="btn primary big" data-step="1">Begin</button><button class="btn big" data-action="web-demo">Bekijk een voorbeeld</button></div>
-      <p class="muted small in-privacy">Privé: je gegevens blijven op je gsm. dE3p bewaart niets van jou.</p>
+      <p class="muted small in-privacy">Privé: je gegevens blijven op je eigen toestel. dE3p bewaart niets van jou. <a href="/privacy/">Privacyverklaring</a></p>
     </section>
   </div>`;
 }
@@ -945,6 +963,17 @@ function installHint() {
     : 'Tik rechtsboven op <i>⋮</i> en kies <i>App installeren</i>.'}</div>`;
 }
 function setupChoose() {
+  if (DESK()) {
+    return `<section class="panel setup">
+    <div class="choices">
+      <a class="choice" href="/download/"><b>Het programma voor ${OS_NAME()}</b>
+        <span>Aanrader op een computer. Ook je slaap en herstel van Garmin, Whoop, Oura en Polar, en je gewicht van Withings.</span><i class="label">Gratis download</i></a>
+      <button class="choice" data-step="1"><b>Hier in de browser</b>
+        <span>Rechtstreeks van Strava, zonder iets te installeren. ${S.settings.web?.sharedStrava ? 'Je logt in met je Strava-account.' : 'Je maakt één keer een Strava-sleutel.'}</span><i class="label">1 minuut</i></button>
+    </div>
+    <div class="btns"><button class="btn" data-action="web-demo">Bekijk een voorbeeld</button></div>
+  </section>`;
+  }
   return `<section class="panel setup">
     ${installHint()}
     <div class="choices">
@@ -1000,11 +1029,11 @@ async function pairSubmit(form) {
 function setupShared() {
   const web = WEB();
   return `<section class="panel setup">
-    <p class="lead">Log in met je Strava-account, ook een gratis account is genoeg. dE3p mag dan je trainingen lezen (ook privé) en de naam van een training aanpassen. Je gegevens blijven op ${web ? 'deze gsm' : 'deze computer'}.</p>
+    <p class="lead">Log in met je Strava-account, ook een gratis account is genoeg. dE3p mag dan je trainingen lezen (ook privé) en de naam van een training aanpassen. Je gegevens blijven op ${web ? HERE() : 'deze computer'}.</p>
     ${S.setupError ? `<div class="alert">${esc(S.setupError)}</div>` : ''}
     ${S.connecting ? `<div class="waiting"><span class="spinner"></span> ${S.settings.web?.ios ? 'Strava opent in Safari. Tik op <i>Authorize</i> en open daarna dE3p weer via het icoon op je beginscherm.' : web ? 'Wacht op Strava… Keur goed en kom daarna terug.' : 'Je browser opent Strava. Klik op <i>Authorize</i> en kom daarna terug naar dit venster.'}</div>
       ${web ? '' : '<div class="btns"><button class="btn" data-action="cancel-connect">Annuleren</button></div>'}` : ''}
-    <div class="btns"><button class="btn big strava" data-action="strava-shared" ${S.connecting ? 'disabled' : ''}>Koppel met Strava</button></div>
+    <div class="btns"><button class="strava-connect" data-action="strava-shared" ${S.connecting ? 'disabled' : ''}>${STRAVA_CONNECT}</button></div>
     <p class="muted small" style="margin:14px 0 0">Heb je een Strava-abonnement en wil je liever je eigen sleutel? <button class="link-btn" data-action="own-key">Maak je eigen sleutel</button></p>
     ${web && !S.reconnect ? '<p class="muted small" style="margin:8px 0 0">Heb je dE3p op je computer? <button class="link-btn" data-step="pc">Koppel met je computer</button></p>' : ''}
     ${web && !S.reconnect ? '<div class="btns end"><button class="btn" data-step="intro">← Vorige</button></div>' : ''}
@@ -1020,7 +1049,7 @@ function setupKey() {
       <span class="k">${k}</span><span class="v">${esc(v)}</span>
       ${copy ? `<button class="copy" data-copy="${esc(v)}">Kopieer</button>` : '<span></span>'}</div>`).join('');
   return `<section class="panel setup">
-    <p class="lead">Met een eigen Strava-sleutel gaan je gegevens rechtstreeks van Strava naar ${web ? 'deze gsm' : 'deze computer'}. Die maak je één keer, in een paar minuten. <b>Let op:</b> sinds juni 2026 kan dat enkel met een betaald Strava-abonnement.${(web ? S.settings.web?.sharedStrava : S.settings.sharedStrava) ? ' Geen abonnement? <button class="link-btn" data-action="shared-key">Log gewoon in met Strava</button>.' : ''}</p>
+    <p class="lead">Met een eigen Strava-sleutel gaan je gegevens rechtstreeks van Strava naar ${web ? HERE() : 'deze computer'}. Die maak je één keer, in een paar minuten. <b>Let op:</b> sinds juni 2026 kan dat enkel met een betaald Strava-abonnement.${(web ? S.settings.web?.sharedStrava : S.settings.sharedStrava) ? ' Geen abonnement? <button class="link-btn" data-action="shared-key">Log gewoon in met Strava</button>.' : ''}</p>
     <ol class="todo">
       <li><b>Open de Strava-pagina voor ontwikkelaars</b> en log in met je gewone Strava-account.
         <div class="btns"><button class="btn primary" data-action="strava-api">Open strava.com/settings/api</button></div></li>
@@ -1057,9 +1086,9 @@ function setupConnect() {
             : '<b>Je browser opent Strava.</b><br>Klik daar op de oranje knop <i>Authorize</i> en kom daarna terug naar dit venster.'}</div>
           <button class="btn" type="button" data-action="cancel-connect">Annuleren</button></div>
           ${WEB() ? '' : `<figure class="setup-pic span2"><img src="img/strava-auth-${OS()}.webp" alt="Op Strava: de oranje knop Authorize omcirkeld"></figure>`}`
-        : `<div class="btns span2">${S.reconnect ? '' : '<button class="btn" type="button" data-step="1">← Vorige</button>'}<button class="btn strava" type="submit">Koppel met Strava</button></div>`}
+        : `<div class="btns span2">${S.reconnect ? '' : '<button class="btn" type="button" data-step="1">← Vorige</button>'}<button class="strava-connect" type="submit">${STRAVA_CONNECT}</button></div>`}
     </form>
-    <p class="muted small" style="margin:18px 0 0">Je sleutel blijft op ${WEB() ? 'deze gsm' : 'deze computer'}. Niemand anders, ook dE3p niet, krijgt je gegevens te zien.</p>
+    <p class="muted small" style="margin:18px 0 0">Je sleutel blijft op ${WEB() ? HERE() : 'deze computer'}. Niemand anders, ook dE3p niet, krijgt je gegevens te zien.</p>
   </section>`;
 }
 
@@ -1107,9 +1136,11 @@ function planFormHtml(inSetup) {
     <label class="field"><span class="label">Afstand</span>
       <select class="input" name="distance">${Object.entries(DISTANCES).map(([k, v]) => opt(k, v.label, c.distance || 'marathon')).join('')}</select></label>
     <label class="field"><span class="label">Doeltijd (u:mm:ss)</span>
-      <input class="input" name="goal" required placeholder="3:30:00" value="${esc(c.goalSec ? fmtTime(c.goalSec) : '')}"><small data-pace></small></label>
-    <label class="field"><span class="label">Km per week nu</span>
-      <input class="input" type="number" name="baseKm" min="10" max="200" required value="${esc(c.baseKm ?? 30)}"><small>Wat loop je de laatste weken gemiddeld?</small></label>
+      <input class="input" name="goal" placeholder="leeg = weet ik nog niet" value="${esc(c.goalSec && !c.goalAuto ? fmtTime(c.goalSec) : '')}"><small data-pace></small></label>
+    <label class="field"><span class="label">Waar sta je nu?</span>
+      <select class="input" name="level">${Object.entries(RUN_LEVELS).map(([k, v]) => opt(k, v.label, c.level || 'km')).join('')}</select><small data-level></small></label>
+    <label class="field" data-basekm><span class="label">Km per week nu</span>
+      <input class="input" type="number" name="baseKm" min="0" max="200" value="${esc(c.baseKm ?? 30)}"><small>Wat loop je de laatste weken gemiddeld?</small></label>
     <label class="field"><span class="label">Loopdagen per week</span>
       <select class="input" name="runDays">${[3, 4, 5, 6].map((n) => opt(n, `${n} dagen`, c.runDays ?? 4)).join('')}</select></label>
     <label class="field"><span class="label">Lange duurloop op</span>
@@ -1135,19 +1166,29 @@ function updatePacePreview(form) {
   const sec = parseTime(f.get('goal'));
   const D = DISTANCES[f.get('distance')];
   const out = form.querySelector('[data-pace]');
-  if (out) out.textContent = sec && D ? `= ${pace(sec / D.km)}/km gemiddeld` : 'Bv. 3:30:00, of 45:00 voor een 10 km';
+  if (out) out.textContent = sec && D ? `= ${pace(sec / D.km)}/km gemiddeld` : 'Bv. 3:30:00, of 45:00 voor een 10 km. Weet je het niet: leeg laten.';
+  const lv = RUN_LEVELS[f.get('level')] || RUN_LEVELS.km;                    // beginnen: je moet je afstand nog niet kunnen lopen
+  const lo = form.querySelector('[data-level]');
+  if (lo) lo.textContent = `${lv.hint} Je doelafstand moet je nog niet kunnen lopen: het schema bouwt rustig op.`;
+  const bk = form.querySelector('[data-basekm]');
+  if (bk) bk.hidden = lv.from != null;
 }
 
 async function savePlanForm(form) {
   const f = new FormData(form);
-  const goalSec = parseTime(f.get('goal'));
-  if (!goalSec) return toast('Doeltijd als u:mm:ss, bv. 3:30:00 (of 45:00)', 5000);
+  const typed = String(f.get('goal') || '').trim();
+  const level = RUN_LEVELS[f.get('level')] ? f.get('level') : 'km';
+  const goalSec = typed ? parseTime(typed) : EASY_GOAL[f.get('distance')];   // leeg: rustige tempo's
+  if (!goalSec) return toast('Doeltijd als u:mm:ss, bv. 3:30:00 (of 45:00), of laat het leeg', 5000);
+  if (level === 'km' && !(Number(f.get('baseKm')) > 0)) return toast('Vul in hoeveel km je nu per week loopt, of kies bij "Waar sta je nu?" dat je nog niet loopt.', 6000);
   const cfg = {
     raceName: String(f.get('raceName') || '').trim(),
     raceDate: f.get('raceDate'),
     distance: f.get('distance'),
     goalSec,
-    baseKm: Number(f.get('baseKm')),
+    goalAuto: !typed,
+    level,
+    baseKm: level === 'km' ? Number(f.get('baseKm')) : 0,
     runDays: Number(f.get('runDays')),
     longDay: Number(f.get('longDay')),
     restDay: Number(f.get('restDay')),
@@ -1165,7 +1206,7 @@ async function savePlanForm(form) {
     return toast(`Schema bewaren mislukt: ${errMsg(e)}`, 8000);
   }
   const peak = Math.max(...plan.weeks.map((w) => w.km));
-  S.planInfo = `Schema gemaakt: ${plan.weeks.length} weken tot ${cfg.raceName || DISTANCES[cfg.distance].label}, piek ${km(peak, 0)} km per week, wedstrijdtempo ${pace(goalSec / DISTANCES[cfg.distance].km)}/km.`;
+  S.planInfo = `Schema gemaakt: ${plan.weeks.length} weken tot ${cfg.raceName || DISTANCES[cfg.distance].label}, piek ${km(peak, 0)} km per week${cfg.goalAuto ? '' : `, wedstrijdtempo ${pace(goalSec / DISTANCES[cfg.distance].km)}/km`}.${level !== 'km' ? ' Je begint met lopen en wandelen.' : ''}`;
   if (S.view === 'setup') { S.step = 4; render(); return undefined; }
   S.planPrefill = null;
   toast('Loopschema gemaakt');
@@ -1215,8 +1256,9 @@ function connState(c) {
     const vals = [g ? `${g.mgdl} mg/dL` : '', b ? `${b.sys}/${b.dia}` : ''].filter(Boolean);
     return { on: true, txt: vals.join(' · ') || cap([tr.glucose ? 'bloedsuiker' : '', tr.bp ? 'bloeddruk' : ''].filter(Boolean).join(' en ')) };
   }
-  if (WEB() && c.k === 'strava') return st.web?.strava ? { on: true, txt: `Op deze gsm${st.athlete ? ` · ${st.athlete}` : ''}` } : { on: false, txt: 'Koppelen' };
-  if (WEB() && c.k === 'intervals' && !st.web?.pc) return st.wear?.intervals ? { on: true, txt: 'Gekoppeld op deze gsm' } : { on: false, txt: 'Koppelen' };
+  if (WEB() && c.k === 'strava') return st.web?.strava ? { on: true, txt: `Op ${HERE()}${st.athlete ? ` · ${st.athlete}` : ''}` } : { on: false, txt: 'Koppelen' };
+  if (WEB() && c.k === 'intervals' && !st.web?.pc) return st.wear?.intervals ? { on: true, txt: `Gekoppeld op ${HERE()}` } : { on: false, txt: 'Koppelen' };
+  if (WEB() && WEB_WEAR.includes(c.k) && !webConn(c, st)) return { on: false, txt: DESK() ? `Via het programma voor ${OS_NAME()}` : 'Via dE3p op je computer' };
   if (WEB()) return { on: true, txt: 'Via je computer' };
   if (c.k === 'strava') return { on: true, txt: st.legacy ? 'Gekoppeld' : `Gekoppeld${st.athlete ? ` · ${st.athlete}` : ''}` };
   if (c.k === 'garmin') return st.garmin ? { on: true, txt: 'Gekoppeld' } : { on: false, txt: 'Koppelen' };
@@ -1225,6 +1267,7 @@ function connState(c) {
 }
 function connDetail(c) {
   const st = S.settings;
+  if (WEB() && WEB_WEAR.includes(c.k) && !webConn(c, st)) return progRow(c.n);
   if (c.k === 'gsm') return phoneRow();
   if (c.k === 'apple') return appleRow();
   if (c.k === 'scale') return scaleRow();
@@ -1543,6 +1586,7 @@ function phoneRow() {
     <div class="btns tight">${code ? '' : `<button class="btn primary" data-action="phone-pair" ${S.phoneBusy ? 'disabled' : ''}>Toon koppelcode</button>`}</div></div>`;
 }
 
+const WEB_WEAR = ['garmin', 'whoop', 'oura', 'polar', 'withings'];   // op de website: koppelen via het programma
 const CONN_ORDER = ['gsm', 'strava', 'apple', 'notion', 'garmin', 'scale', 'vitals', 'whoop', 'oura', 'polar', 'withings', 'intervals'];   // vaste volgorde: gsm, Strava, Notion, de rest
 // op de gsm: wat er via je computer binnenkomt; weegschaal en bloedsuiker/bloeddruk enkel als je gsm met je computer
 // gekoppeld is (bloedsuiker/bloeddruk ook met Apple Gezondheid in de iPhone-app)
@@ -1552,10 +1596,10 @@ const webConn = (c, st) => c.app || c.k === 'strava' || c.k === 'notion'
 function connList() {
   const st = S.settings;
   const list = CONNS.filter((c) => c.k !== 'pc' && (c.k !== 'notion' || st.notion) && (!c.app || st.web?.apple)
-      && (WEB() ? !c.desk && webConn(c, st) : !c.web))
+      && (WEB() ? !c.desk && (webConn(c, st) || WEB_WEAR.includes(c.k)) : !c.web))
     .sort((a, b) => CONN_ORDER.indexOf(a.k) - CONN_ORDER.indexOf(b.k));
   // horloges, ringen, weegschaal en intervals.icu die je (nog) niet gebruikt: samen onder één rij
-  const spare = list.filter((c) => c.wear && !connState(c).on);
+  const spare = WEB() ? [] : list.filter((c) => c.wear && !connState(c).on);
   const shown = S.connMore || spare.length < 2 ? list : list.filter((c) => !spare.includes(c));
   const more = !S.connMore && spare.length >= 2 ? `<button class="crow" data-action="conn-more"><span class="mark" style="--b:#2a2a2a">+</span>
       <span class="crow-t"><b>Meer koppelingen</b><small>${spare.map((c) => c.n).join(', ')}</small></span><span class="chev">${ICON.down}</span></button>` : '';
@@ -1579,6 +1623,30 @@ function connGrid() {
       <span class="mark" style="--b:${c.b}">${c.m}</span><b>${esc(c.n)}</b><small>${esc(s.txt)}</small></button>`;
   }).join('');
   return `<div class="conns">${tiles}</div>${sel ? `<section class="panel settings conn-detail">${connDetail(sel)}</section>` : ''}`;
+}
+
+// website: horloges, ringen en Withings koppel je in het programma (dat praat rechtstreeks met Garmin, Whoop, ...)
+function progRow(name) {
+  const dl = `<a class="btn primary" href="/download/" target="_blank" rel="noopener">Download dE3p voor ${OS_NAME() === 'je computer' ? 'Windows of Mac' : OS_NAME()}</a>`;
+  if (DESK()) {
+    return `<div class="set-row stack"><div><div class="v">${esc(name)} koppel je in het programma</div>
+      <small class="muted">Het programma dE3p voor ${OS_NAME()} haalt je slaap, HRV en herstel rechtstreeks op. Gratis, in 3 stappen:</small></div>
+      <ol class="wsteps"><li>Download dE3p en open het.</li><li>Klik op <i>Koppel met Strava</i> en log in met hetzelfde Strava-account.</li><li>Ga naar <i>Instellingen</i> → <i>${esc(name)}</i> → <i>Koppelen</i>.</li></ol>
+      <div class="btns">${dl}</div>
+      <small class="muted">Daarna gebruik je op deze computer gewoon het programma: dat doet alles wat deze website doet, en meer.</small></div>`;
+  }
+  return `<div class="set-row stack"><div><div class="v">${esc(name)} koppel je met dE3p op je computer</div>
+    <small class="muted">Koppel ${esc(name)} in het programma op je computer (Windows of Mac). Koppel daarna deze gsm met je computer (hieronder bij <i>Je computer</i>): dan zie je hier ook je slaap en herstel.</small></div>
+    <div class="btns">${dl}</div></div>`;
+}
+
+// website op een computer: het programma aanraden (horloges en ringen werken enkel daar)
+function deskCard() {
+  return `<section class="panel pc-card">
+    <div class="pc-head"><span class="mark">${PC_ICON}</span><div><div class="v">Het programma voor ${OS_NAME() === 'je computer' ? 'je computer' : `je ${OS_NAME()}`}</div>
+      <small class="pc-state">Aanrader op een computer</small></div></div>
+    <p class="muted small">Je gebruikt nu de website. Het gratis programma dE3p doet hetzelfde en koppelt ook met Garmin, Whoop, Oura, Polar en Withings. Download het, open het en klik op <i>Koppel met Strava</i>.</p>
+    <div class="btns"><a class="btn primary" href="/download/" target="_blank" rel="noopener">Download dE3p</a></div></section>`;
 }
 
 // gsm: de koppeling met je computer is de belangrijkste, dus altijd open bovenaan
@@ -1619,7 +1687,7 @@ function vInstellingenWeb() {
     ${w.pc ? `<h2 class="set-h">Je computer</h2>${pcCard()}` : ''}
     <h2 class="set-h">Koppelingen</h2>
     ${connList()}
-    ${w.pc || w.demo ? '' : `<h2 class="set-h">Je computer</h2>${pcCard()}`}
+    ${w.pc || w.demo ? '' : `<h2 class="set-h">${DESK() ? 'Programma' : 'Je computer'}</h2>${DESK() ? deskCard() : pcCard()}`}
     <h2 class="set-h">Schema's</h2>
     <section class="panel settings">${goalsRow()}</section>
     <h2 class="set-h">Weergave en hulp</h2>
@@ -1629,10 +1697,12 @@ function vInstellingenWeb() {
           `<button data-theme-set="${k}" class="${(st.theme || 'dark') === k ? 'on' : ''}" aria-pressed="${(st.theme || 'dark') === k}">${l}</button>`).join('')}</div></div>
       <div class="set-row"><div><div class="v">Handleiding</div><small class="muted">Alle stappen met prentjes.</small></div>
         <div class="btns tight"><button class="btn" data-action="website">Open</button></div></div>
+      <div class="set-row"><div><div class="v">Privacy</div><small class="muted">Je gegevens blijven op je eigen toestel. Lees hoe dE3p ermee omgaat.</small></div>
+        <div class="btns tight"><a class="btn" href="/privacy/" target="_blank" rel="noopener">Open</a></div></div>
     </section>
-    <h2 class="set-h">Op deze gsm</h2>
+    <h2 class="set-h">Op ${HERE()}</h2>
     <section class="panel settings">
-      <div class="set-row"><div><div class="v">Alles wissen</div><small class="muted">Koppelingen, schema en gegevens op deze gsm. Je computer en Strava blijven zoals ze zijn.</small></div>
+      <div class="set-row"><div><div class="v">Alles wissen</div><small class="muted">Koppelingen, schema en gegevens op ${HERE()}. ${DESK() ? 'Het programma' : 'Je computer'} en Strava blijven zoals ze zijn.</small></div>
         <div class="btns tight"><button class="btn" data-action="web-reset">Wissen</button></div></div>
     </section>`;
 }
@@ -1671,7 +1741,7 @@ function vInstellingen() {
     <h2 class="set-h">Hulp</h2>
     <section class="panel settings">
       <div class="set-row"><div><div class="v">Handleiding</div><small class="muted">Alle stappen met schermafbeeldingen, voor Windows, Mac en je gsm.</small></div>
-        <div class="btns tight"><button class="btn" data-action="manual">Open</button><button class="btn" data-action="website">Website</button></div></div>
+        <div class="btns tight"><button class="btn" data-action="manual">Open</button><button class="btn" data-action="website">Website</button><button class="btn" data-action="privacy">Privacy</button></div></div>
     </section>
     <details class="adv"${S.advOpen ? ' open' : ''}><summary class="set-h">Geavanceerd</summary>
     <section class="panel settings">
@@ -2336,7 +2406,7 @@ function vDoelen() {
     const cur = D?.schema?.find((x) => x.rows.some((r) => r.date >= mon && r.date <= sun));
     const kmDone = D ? sumKm(D.runs.filter((r) => r.date >= mon && r.date <= sun)) : 0;
     const runDays = cur ? [...new Set(cur.rows.filter((r) => !r.rest).map((r) => wd(r.date)))].sort((a, b) => a - b) : [];
-    const target = D?.race?.goal || (plan?.goalSec ? fmtTime(plan.goalSec) : '');
+    const target = D?.race?.goal || (plan?.goalSec && !plan.goalAuto ? fmtTime(plan.goalSec) : '');
     cards.push(goalCardHtml({
       kind: 'Wedstrijd', title: D?.race?.name || plan?.raceName || DISTANCES[plan?.distance]?.label || 'Wedstrijd',
       sub: [D?.race?.date || plan?.raceDate ? nlDate(D?.race?.date || plan.raceDate) : '', target ? `doel ${target}` : '', st.notion ? 'uit Notion' : fromPc ? 'van je computer' : ''].filter(Boolean).join(' · '),
@@ -3585,7 +3655,7 @@ document.addEventListener('click', async (e) => {
     if (a === 'disconnect') {
       await api().strava_disconnect();
       S.settings = await api().settings();
-      if (WEB() && S.settings.connected) { toast('Strava ontkoppeld op deze gsm'); render(); return await doRefresh(); }
+      if (WEB() && S.settings.connected) { toast(`Strava ontkoppeld op ${HERE()}`); render(); return await doRefresh(); }
       S.data = null; S.step = WEB() ? 'intro' : 1; S.cid = ''; S.csec = ''; S.onboarding = true;
       return go('setup');
     }
@@ -3655,6 +3725,7 @@ document.addEventListener('click', async (e) => {
     if (a === 'garmin-refresh') { await api().garmin_recovery(true); S.health = null; toast('Garmin bijgewerkt'); return undefined; }
     if (a === 'health-refresh') { t.disabled = true; t.classList.add('busy'); return await loadHealth(true); }
     if (a === 'website') { await api().open_url('https://www.de3p.be/download/'); return undefined; }
+    if (a === 'privacy') { await api().open_url('https://www.de3p.be/privacy/'); return undefined; }
     if (a === 'wear-portal') { await api().open_url(WEAR[t.dataset.k].url); return undefined; }
     if (a === 'wear-off') { await api().wear_disconnect(t.dataset.k); S.settings = await api().settings(); S.health = null; render(); return toast('Ontkoppeld'); }
     if (a === 'body-edit') { S.bodyEdit = true; S.bodyError = ''; render(); return undefined; }

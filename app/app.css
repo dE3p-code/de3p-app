@@ -1367,4 +1367,17 @@ svg text.lbl.run { fill: var(--sp-run); } svg text.lbl.ride { fill: var(--sp-rid
 .bage-x { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
 .bage-form { display: flex; flex-wrap: wrap; gap: 8px; }
 .bage-form .input { width: auto; min-width: 150px; flex: 1 1 150px; }
-}
+
+/* Strava-merkregels: officiële knop (48 px), 'View on Strava' vet + oranje #FC5200, 'Powered by Strava' los en klein */
+.btns button.strava-connect, button.strava-connect { all: unset; background: none; border: 0; padding: 0; cursor: pointer; display: inline-block; line-height: 0; border-radius: 6px; }
+.strava-connect img { height: 48px; width: auto; display: block; }
+.strava-connect:disabled { opacity: .5; cursor: default; }
+.strava-connect:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+.btns button.strava-link, button.strava-link { all: unset; cursor: pointer; font-weight: 700; color: #FC5200; text-decoration: underline; text-underline-offset: 3px; padding: 10px 4px; }
+.strava-link:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.pwrd { display: flex; justify-content: center; padding: 28px 0 8px; opacity: .85; }
+.pwrd img { height: 15px; width: auto; }
+.pwrd .pw-light { display: none; }
+:root[data-theme="light"] .pwrd .pw-dark { display: none; }
+:root[data-theme="light"] .pwrd .pw-light { display: block; }
+a.btn { text-decoration: none; }

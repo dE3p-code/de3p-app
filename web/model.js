@@ -81,7 +81,7 @@ const mondayOf = (iso) => { const [y, m, d] = iso.split('-').map(Number); const 
 export function race(plan) {
   const c = plan?.config || {};
   if (!c.raceDate) return null;
-  return { name: c.raceName || DIST_LABEL[c.distance] || 'Wedstrijd', date: c.raceDate, goal: c.goalSec ? fmtTime(c.goalSec) : '' };
+  return { name: c.raceName || DIST_LABEL[c.distance] || 'Wedstrijd', date: c.raceDate, goal: c.goalSec && !c.goalAuto ? fmtTime(c.goalSec) : '' };
 }
 
 export function uiWeeks(plan, today) {

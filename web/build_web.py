@@ -80,6 +80,7 @@ def main() -> None:
         shutil.copy2(APP / name, out / name)
     shutil.copytree(APP / "fonts", out / "fonts")
     shutil.copytree(APP / "js", out / "js")
+    shutil.copytree(APP / "img" / "strava", out / "img" / "strava")   # officiële Strava-knop en -logo (merkregels)
     (out / "web").mkdir()
     for f in WEB.glob("*"):
         if f.suffix in (".js", ".json", ".jpg") and f.name != "sw.js":

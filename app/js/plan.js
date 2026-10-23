@@ -36,6 +36,21 @@ export const KINDS = {
   cross: { label: 'Fiets', title: 'Fiets' },
 };
 
+// Beginnen vanaf nul: eerst lopen en wandelen afwisselen tot je 30 minuten aan één stuk loopt
+// (3 keer per week), pas daarna kilometers. Je moet je doelafstand dus nog niet kunnen lopen.
+export const LADDER = [
+  { reps: 8, run: 1, walk: 2 }, { reps: 6, run: 2, walk: 2 }, { reps: 5, run: 3, walk: 2 },
+  { reps: 4, run: 5, walk: 2 }, { reps: 3, run: 8, walk: 2 }, { reps: 2, run: 12, walk: 2 },
+  { run: 20 }, { run: 25 }, { run: 30 },
+];
+export const RUN_LEVELS = {
+  walk: { label: 'Ik loop nog niet', hint: 'Je begint met 1 minuut lopen en 2 minuten wandelen.', from: 0 },
+  run15: { label: 'Ik kan 10 à 15 minuten lopen', hint: 'Je begint met 2 keer 12 minuten lopen, met wandelen ertussen.', from: 5 },
+  km: { label: 'Ik loop al', hint: 'Het schema begint bij je kilometers van nu.', from: null },
+};
+// geen doeltijd (weet je nog niet): rustige tempo's, zodat het schema toch werkt
+export const EASY_GOAL = { '5k': 34 * 60, '10k': 72 * 60, half: 2.75 * 3600, marathon: 5.75 * 3600 };
+
 export const RUN_KINDS = new Set(['recovery', 'easy', 'strides', 'long', 'tempo', 'interval', 'mp', 'race']);
 export const isRunDay = (day) => RUN_KINDS.has(day.kind);
 
@@ -84,24 +99,37 @@ export function generatePlan(cfg) {
   const taperCurve = t ? D.taper.slice(-t) : [];
   const nBuild = nPre - t;
 
+  // beginner: eerst de wandel-loopweken, stap voor stap (nooit een stap overslaan). Is er te weinig
+  // tijd, dan gaat de ladder door tot de wedstrijd en loop je die met wandelen ertussen.
+  const from = RUN_LEVELS[cfg.level]?.from;
+  const need = from != null ? LADDER.length - from : 0;
+  const allWalk = from != null && need >= nBuild;            // geen tijd voor km-weken: ook geen taper
+  const ladder = from == null ? [] : LADDER.slice(from, from + (allWalk ? nPre : need));
+  const easyPace = zone('easy')[1];
+  const walkKm = (st) => r05(Math.max(1, ((st.reps || 1) * st.run * 60) / easyPace + ((st.reps || 0) * (st.walk || 0) * 60 + 600) / 600));
+  const nRun = allWalk ? 0 : nBuild - ladder.length;                     // daarna: gewone opbouw in kilometers
+
   // opbouw richting piek
-  const base = Math.max(10, Number(cfg.baseKm) || 30);
+  const base = ladder.length ? Math.max(8, walkKm(ladder[ladder.length - 1]) * 3) : Math.max(8, Number(cfg.baseKm) || 30);
   const peak = Math.max(base, Math.min(base * D.peakMul, D.peakCap));
-  const cutWeeks = nBuild >= 5 ? Math.floor((nBuild - 1) / 4) : 0;
-  const steps = Math.max(1, nBuild - 1 - cutWeeks);
+  const cutWeeks = nRun >= 5 ? Math.floor((nRun - 1) / 4) : 0;
+  const steps = Math.max(1, nRun - 1 - cutWeeks);
   const g = Math.min(1.1, (peak / base) ** (1 / steps));
-  const weeks = [];
+  const weeks = ladder.map((st, i) => ({ km: walkKm(st) * 3, phase: 'Start', walk: st, i }));
   let v = base;
-  for (let i = 0; i < nBuild; i += 1) {
-    const cut = nBuild >= 5 && (i + 1) % 4 === 0 && i < nBuild - 1;
-    if (i > 0 && !cut) v = Math.min(peak, v * g);
-    const late = i >= nBuild - 2;                          // laatste 2 opbouwweken = piek
-    const phase = cut ? 'Herstelweek' : late && (nBuild >= 3 || t > 0) ? 'Piek'
-      : nBuild >= 6 && i < Math.floor(nBuild * 0.25) ? 'Basis' : 'Opbouw';
+  for (let k = 0; k < nRun; k += 1) {
+    const i = ladder.length + k;
+    const cut = nRun >= 5 && (k + 1) % 4 === 0 && k < nRun - 1;
+    if (k > 0 && !cut) v = Math.min(peak, v * g);
+    const late = k >= nRun - 2;                            // laatste 2 opbouwweken = piek
+    const phase = cut ? 'Herstelweek' : late && (nRun >= 3 || t > 0) ? 'Piek'
+      : nRun >= 6 && k < Math.floor(nRun * 0.25) ? 'Basis' : 'Opbouw';
     weeks.push({ km: cut ? v * 0.8 : v, phase, i });
   }
-  const reached = Math.max(base, ...weeks.map((w) => w.km));
-  taperCurve.forEach((f, j) => weeks.push({ km: reached * f, phase: 'Taper', i: nBuild + j }));
+  const reached = Math.max(nRun ? base : 0, ...weeks.map((w) => w.km));
+  if (!allWalk) taperCurve.forEach((f, j) => weeks.push({ km: reached * f, phase: 'Taper', i: nBuild + j }));
+  const beginner = from != null;
+  const walkRace = allWalk && ladder[ladder.length - 1]?.reps;   // nog niet aan één stuk: wedstrijd met wandelen
 
   const L = layout(cfg);
   const out = [];
@@ -109,7 +137,7 @@ export function generatePlan(cfg) {
   // gewone weken (opbouw + taper)
   weeks.forEach((w, wi) => {
     const monday = addDays(firstMon, wi * 7);
-    const days = buildWeek(monday, w, wi);
+    const days = w.walk ? buildWalkWeek(monday, w.walk) : buildWeek(monday, w, wi);
     // weektotaal = wat er echt in de week staat (zo klopt het getal met de trainingen)
     out.push({ monday, phase: w.phase, km: r05(days.filter(isRunDay).reduce((x, d) => x + d.km, 0)), days });
   });
@@ -127,6 +155,28 @@ export function generatePlan(cfg) {
     weeks: out.filter((w) => w.days.length).map((w, i) => ({ ...w, index: i + 1 })),
   };
   return plan;
+
+  // ---- wandel-loopweek: 3 keer, nooit twee dagen na elkaar ------------------
+  function buildWalkWeek(monday, st) {
+    const near = (a, b) => Math.min((a - b + 7) % 7, (b - a + 7) % 7) <= 1;
+    const pick = [L.long];
+    for (const d of [1, 3, 2, 0, 4, 6, 5].filter((x) => L.runs.includes(x))) {
+      if (pick.length < 3 && !pick.some((x) => near(x, d))) pick.push(d);
+    }
+    for (const d of L.runs) if (pick.length < 3 && !pick.includes(d)) pick.push(d);
+    const title = st.reps ? 'Lopen en wandelen' : `${st.run} min rustig lopen`;
+    const detail = st.reps ? `${st.reps}× ${st.run} min lopen + ${st.walk} min wandelen, op praattempo`
+      : `${st.run} min aan één stuk, op praattempo. Wandelen mag altijd.`;
+    const byDow = {};
+    for (const d of L.runs.concat(L.long)) {
+      byDow[d] = pick.includes(d)
+        ? { kind: d === L.long ? 'long' : 'easy', title, detail, km: walkKm(st), pace: zone('easy'), walk: true }
+        : { kind: 'rest', km: 0, pace: null, detail: 'Rust, of een wandeling van 30 min' };
+    }
+    byDow[L.rest] = { kind: 'rest', km: 0, pace: null, detail: 'Volledig herstel' };
+    if (L.cross != null) byDow[L.cross] = { kind: 'cross', km: 0, pace: null, detail: '30–45 min rustig' };
+    return toDays(monday, byDow);
+  }
 
   // ---- weekopbouw ----------------------------------------------------------
   function buildWeek(monday, w, wi) {
@@ -161,7 +211,8 @@ export function generatePlan(cfg) {
     }
     if (nQ === 1) q.splice(0, 2, wi % 2 === 0 ? q[0] : q[1]);
     // weinig kilometers = beginner: nog geen intervallen of tempo, enkel rustig + versnellingen
-    if (vol < 20) q.splice(0, q.length, 'strides', 'easy');
+    // beginner: na de wandel-loopweken eerst nog 4 weken enkel rustig
+    if (vol < 20 || (beginner && w.i < ladder.length + 4)) q.splice(0, q.length, 'strides', 'easy');
     const shrink = taper ? 0.7 : cut ? 0.8 : 1;
     const wu = vol < 30 ? 1 : 2;                           // in- en uitlopen (km), korter bij weinig volume
     const iu = (km) => `${wu} km IL + ${km} + ${wu} km UL`;
@@ -235,23 +286,34 @@ export function generatePlan(cfg) {
   function buildRaceWeek(monday, vol) {
     const raceDow = weekday(cfg.raceDate);
     const byDow = {};
-    const before = L.runs.concat(L.long).filter((d) => d < raceDow - 1).sort((a, b) => a - b);
+    const before = L.runs.concat(L.long).filter((d) => d < raceDow - 1 && !(beginner && d === 0)).sort((a, b) => a - b);   // beginner: maandag rust na het weekend
     const tuneUp = before.find((d) => d <= raceDow - 3 && d !== L.recovery) ?? null;
-    const strideDay = before.filter((d) => d !== tuneUp).pop() ?? null;
-    const easyKm = r05(clamp(vol / Math.max(1, before.length), 3, 10));
+    // beginner: nooit twee dagen na elkaar lopen, en verder rust
+    const strideDay = before.filter((d) => d !== tuneUp && !(beginner && tuneUp != null && Math.abs(d - tuneUp) <= 1)).pop() ?? null;
+    const easyKm = r05(clamp(vol / Math.max(1, before.length), 2, 10));
 
     for (let d = 0; d < 7; d += 1) {
       if (d === raceDow) {
         byDow[d] = { kind: 'race', title: cfg.raceName || D.label, km: D.km, pace: single(rp),
-          detail: `Doel ${fmtTime(cfg.goalSec)} · ${fmtPace(rp)}/km` };
+          detail: walkRace ? 'Lopen en wandelen afwisselen, zoals op training. Uitlopen is het doel.'
+            : cfg.goalAuto ? 'Doel: uitlopen in je eigen tempo. Wandelen mag altijd.' : `Doel ${fmtTime(cfg.goalSec)} · ${fmtPace(rp)}/km` };
       } else if (d > raceDow || d === raceDow - 1) {
         byDow[d] = { kind: 'rest', km: 0, pace: null, detail: d > raceDow ? 'Herstel na de wedstrijd' : 'Rust voor de wedstrijd' };
+      } else if ((d === tuneUp || d === strideDay) && walkRace) {   // nog niet aan één stuk: zoals op training, iets korter
+        const st = ladder[ladder.length - 1];
+        byDow[d] = { kind: 'easy', title: 'Lopen en wandelen', km: r05(walkKm(st) * 0.7), pace: zone('easy'), walk: true,
+          detail: `${Math.max(2, st.reps - 2)}× ${st.run} min lopen + ${st.walk} min wandelen, heel rustig` };
+      } else if (d === tuneUp && beginner) {
+        byDow[d] = { kind: 'easy', title: '20 min rustig lopen', km: Math.min(3, easyKm), pace: zone('easy'), detail: 'Op praattempo, benen los voor de wedstrijd', walk: true };
       } else if (d === tuneUp) {
         const small = reached < 25;                          // beginner: korter blok
         byDow[d] = { kind: 'mp', title: mpTitle, km: small ? 4 : 6, pace: single(rp),
           detail: small ? `1 km IL + 2 km @ ${fmtPace(rp)} + 1 km UL` : `2 km IL + 3 km @ ${fmtPace(rp)} + 1 km UL` };
       } else if (d === strideDay) {
-        byDow[d] = { kind: 'strides', km: Math.min(5, easyKm), pace: zone('easy'), detail: '+ 3 versnellingen, benen wakker' };
+        byDow[d] = beginner ? { kind: 'easy', title: '15 min rustig lopen', km: Math.min(2.5, easyKm), pace: zone('easy'), detail: 'Heel rustig, wandelen mag', walk: true }
+          : { kind: 'strides', km: Math.min(5, easyKm), pace: zone('easy'), detail: '+ 3 versnellingen, benen wakker' };
+      } else if (before.includes(d) && beginner) {
+        byDow[d] = { kind: 'rest', km: 0, pace: null, detail: 'Rust, of een wandeling van 30 min' };
       } else if (before.includes(d)) {
         byDow[d] = { kind: d === L.recovery ? 'recovery' : 'easy', km: easyKm,
           pace: zone(d === L.recovery ? 'recovery' : 'easy'), detail: '' };
@@ -275,6 +337,7 @@ export function generatePlan(cfg) {
         detail: x.detail || '',
         km: x.km ? r05(x.km) : 0,
         pace: x.pace || null,
+        ...(x.walk ? { walk: true } : {}),
       });
     }
     return days.filter((day) => day.date <= cfg.raceDate || day.kind === 'rest');
@@ -326,5 +389,5 @@ export function weekTotals(week, byDate) {
 // Naam op Strava: trainingstype, en bij kwaliteit/lange duurloop ook de structuur.
 // Bv. "Herstelloop" of "Marathonpace-blok — 2 km IL + 4 km @ 4:16 + 2 km UL".
 export const stravaName = (day) => (
-  ['interval', 'tempo', 'mp', 'long'].includes(day.kind) && day.detail
+  (day.walk || ['interval', 'tempo', 'mp', 'long'].includes(day.kind)) && day.detail
     ? `${day.title} — ${day.detail}` : day.title);

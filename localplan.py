@@ -98,7 +98,7 @@ def race(plan: dict | None) -> dict | None:
     if not c.get("raceDate"):
         return None
     return {"name": c.get("raceName") or DIST_LABEL.get(c.get("distance"), "Wedstrijd"),
-            "date": c["raceDate"], "goal": fmt_time(c["goalSec"]) if c.get("goalSec") else ""}
+            "date": c["raceDate"], "goal": fmt_time(c["goalSec"]) if c.get("goalSec") and not c.get("goalAuto") else ""}
 
 
 def ui_weeks(plan: dict | None, today: dt.date) -> list[dict]:
